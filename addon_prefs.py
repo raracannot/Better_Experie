@@ -34,7 +34,7 @@ def draw_description_panel(layout, context):
     row.separator()
     row.operator("wm.url_open", text="哔哩哔哩", icon="USER").url = "https://space.bilibili.com/27284213"
     row.operator("wm.url_open", text="官方库", icon="BLENDER").url = "https://extensions.blender.org/author/58486/"
-    row.operator("wm.url_open", text="Github", icon="FILE_SCRIPT").url = "https://github.com/raracannot"#待发布后补充
+    row.operator("wm.url_open", text="Github", icon="FILE_SCRIPT").url = "https://github.com/raracannot/Better_Experie"#待发布后补充
 
 def draw_thanks_panel(layout, context):
     box=layout.box()

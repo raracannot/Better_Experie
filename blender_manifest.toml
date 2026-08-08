@@ -12,4 +12,4 @@ copyright = ["2026 来一点咖啡吗"]
 tags = ["3D View", "Camera", "Compositing", "Mesh", "Object", "Scene", "Sequencer", "System", "Text Editor", "User Interface"]
 
 [build]
-paths_exclude_pattern = ["__pycache__/", ".git", "*.zip", "note/", "scripts/", "CONVENTIONS.md"]
+paths_exclude_pattern = ["__pycache__/", ".git", ".gitignore", "*.zip", "note/", "scripts/", "CONVENTIONS.md"]
