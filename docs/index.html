@@ -3,15 +3,459 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Better_Experie 功能说明书</title>
-<meta http-equiv="refresh" content="0; url=tooltips.html">
+<title>Better_Experie 全功能说明书 v13</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Chivo:wght@300;400;700;900&display=swap" rel="stylesheet">
 <style>
-  body { font-family: system-ui, sans-serif; background: #fafaf9; color: #1c1917;
-         display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-  a { color: #292524; text-decoration: underline; text-underline-offset: 4px; }
+:root {
+  --bg: #fafaf9; --card: #ffffff; --text: #1c1917; --text2: #78716c;
+  --text3: #a8a29e; --border: #e7e5e4; --accent: #292524; --accent2: #57534e;
+  --radius: 12px; --shadow: 0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --hi: #dc2626; --adv: #7c3aed; --sys: #0d9488; --dbg: #d97706;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Chivo","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.65;-webkit-font-smoothing:antialiased}
+
+.fixed-header{position:fixed;top:0;left:0;right:0;z-index:1000;height:52px;background:rgba(250,250,249,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+.fixed-header .logo{font-family:"Outfit",sans-serif;font-weight:700;font-size:1.05em;letter-spacing:-0.02em;color:var(--accent);cursor:pointer}
+.fixed-header .logo span{font-weight:400;color:var(--text2)}
+
+.progress-bar{position:fixed;top:52px;left:0;z-index:999;height:3px;background:var(--accent);transition:width .3s ease}
+.progress-track{position:fixed;top:52px;left:0;right:0;z-index:998;height:3px;background:var(--border)}
+
+.slide{display:flex;flex-direction:column;position:relative;padding-top:72px;padding-bottom:28px;border-bottom:1px solid var(--border)}
+.slide-inner{padding:0 48px 40px;max-width:1100px;margin:0 auto;width:100%}
+.slide-num{font-family:"Outfit",sans-serif;font-size:clamp(100px,14vw,180px);font-weight:800;color:var(--border);line-height:1;position:absolute;right:48px;top:80px;z-index:0;user-select:none;pointer-events:none}
+.slide-head{margin-bottom:24px;position:relative;z-index:1}
+.slide-head h2{font-family:"Outfit",sans-serif;font-size:clamp(1.6em,2.6vw,2.2em);font-weight:700;color:var(--accent);letter-spacing:-0.03em;margin-bottom:4px}
+.slide-head .subtitle{font-size:.92em;color:var(--text2)}
+.slide-body{position:relative;z-index:1}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.card{background:var(--card);padding:16px 18px;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);transition:box-shadow .2s,transform .2s,border-color .2s;cursor:default;position:relative}
+.card:hover{box-shadow:0 6px 20px rgba(0,0,0,.1);transform:translateY(-2px);border-color:var(--accent2);z-index:10}
+.card .op{font-family:"Outfit",sans-serif;font-weight:600;font-size:.9em;color:var(--accent);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.card .desc{font-size:.84em;color:var(--text2);line-height:1.5}
+.card.hidden{display:none}
+
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:.7em;font-weight:700;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
+.tag.hi{background:#fef2f2;color:var(--hi);border:1px solid #fecaca}
+.tag.adv{background:#f5f3ff;color:var(--adv);border:1px solid #ddd6fe}
+.tag.sys{background:#f0fdfa;color:var(--sys);border:1px solid #99f6e4}
+.tag.dbg{background:#fffbeb;color:var(--dbg);border:1px solid #fde68a}
+
+/* ---- TOOLTIP ---- */
+.tooltip{position:fixed;z-index:9999;max-width:380px;background:var(--accent);color:#fff;padding:18px 20px;border-radius:10px;font-size:.84em;line-height:1.6;pointer-events:none;opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.tooltip.show{opacity:1;transform:translateY(0)}
+.tooltip .tt-loc{font-size:.75em;color:rgba(255,255,255,.55);margin-bottom:6px;letter-spacing:.02em}
+.tooltip .tt-label{font-weight:700;font-size:1em;margin-bottom:4px}
+.tooltip .tt-idname{font-family:"Cascadia Code","SF Mono",monospace;font-size:.76em;color:rgba(255,255,255,.6);margin-bottom:6px;word-break:break-all}
+.tooltip .tt-desc{font-size:.88em;color:rgba(255,255,255,.85);margin-bottom:8px;line-height:1.55}
+.tooltip .tt-keys{font-size:.8em;color:rgba(255,255,255,.7);padding-top:6px;border-top:1px solid rgba(255,255,255,.15)}
+.tooltip .tt-keys kbd{display:inline-block;background:rgba(255,255,255,.15);padding:1px 6px;border-radius:4px;margin:0 2px;font-family:inherit;font-size:.95em}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+table{width:100%;border-collapse:collapse;margin:14px 0 20px;font-size:.86em}
+thead th{padding:10px 14px;text-align:left;color:var(--text2);font-weight:600;font-size:.78em;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:top;font-size:.88em}tr:hover td{background:var(--bg)}
+td:first-child{font-weight:600;color:var(--accent);font-size:.84em;white-space:nowrap}
+
+code{font-family:"Cascadia Code","SF Mono",monospace;font-size:.84em;background:var(--bg);color:var(--accent2);padding:2px 8px;border:1px solid var(--border);border-radius:4px}
+pre{background:var(--bg);padding:16px 20px;overflow-x:auto;margin:12px 0;font-size:.82em;line-height:1.7;border:1px solid var(--border);border-radius:8px;color:var(--text2)}
+.callout{padding:16px 20px;border-radius:var(--radius);font-size:.88em;margin:14px 0;line-height:1.65}
+.callout.tip{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.callout.note{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.callout.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.callout.flow{background:#fdf4ff;border:1px solid #f0abfc;color:#86198f}
+.footer{padding:40px 48px;text-align:center;color:var(--text2);font-size:.84em;border-top:1px solid var(--border);background:var(--bg)}
+.footer a{color:var(--accent);text-decoration:none}
+.dot-nav{position:fixed;right:24px;top:50%;transform:translateY(-50%);z-index:900;display:flex;flex-direction:column;gap:8px}
+.dot-nav a{width:10px;height:10px;border-radius:50%;background:var(--border);transition:background .2s,transform .2s;display:block}
+.dot-nav a:hover,.dot-nav a.active{background:var(--accent);transform:scale(1.3)}
+a{color:var(--accent)}::selection{background:rgba(41,37,36,.1)}
+.breadcrumb{padding:10px 0 6px;font-size:.78em;color:var(--text3);font-weight:500}.breadcrumb span{color:var(--text2)}.breadcrumb span:last-child{color:var(--accent)}
+
+details summary{font-family:"Outfit",sans-serif;font-weight:600;font-size:.95em;color:var(--accent);cursor:pointer;padding:6px 0;list-style:none;display:flex;align-items:center;gap:6px}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'+';display:inline-block;width:18px;font-size:1.2em;color:var(--text2)}
+details[open] summary::before{content:'−';color:var(--accent)}
+
+.search-bar{position:relative;margin:0 0 0}
+.search-bar input{width:100%;padding:12px 16px 12px 42px;border:1px solid var(--border);border-radius:var(--radius);font-family:"Chivo",sans-serif;font-size:.92em;background:var(--card);color:var(--text);outline:none;transition:border-color .2s}
+.search-bar input:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(87,83,78,.1)}
+.search-bar .icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text3)}
+.search-bar .count{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:.78em;color:var(--text3)}
+
+.filter-legend{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 20px;font-size:.82em}
+.filter-legend label{display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--text2);user-select:none}
+.filter-legend input{margin:0;accent-color:var(--accent)}
+
+.hero-section{padding:100px 48px 60px;text-align:center;max-width:800px;margin:0 auto}
+.hero-section h1{font-family:"Outfit",sans-serif;font-size:clamp(2.2em,5vw,3.4em);font-weight:800;color:var(--accent);letter-spacing:-0.04em;line-height:1.15;margin-bottom:12px}
+.hero-section h1 em{font-style:normal;color:var(--hi);text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:2px}
+.hero-pain{font-size:.96em;color:var(--text2);max-width:520px;margin:0 auto 24px;line-height:1.7}
+.hero-points{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:28px 0;text-align:left}
+.hero-point{background:var(--card);padding:18px 20px;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.hero-point .icon{font-size:1.4em;margin-bottom:6px}
+.hero-point h4{font-family:"Outfit",sans-serif;font-weight:700;font-size:.95em;color:var(--accent);margin-bottom:4px}
+.hero-point p{font-size:.82em;color:var(--text2)}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:28px 0}
+.stat-card{background:var(--card);padding:16px 18px;border:1px solid var(--border);border-radius:var(--radius);text-align:center;box-shadow:var(--shadow)}
+.stat-card .val{font-family:"Outfit",sans-serif;font-size:2em;font-weight:800;color:var(--accent);line-height:1;letter-spacing:-0.03em}
+.stat-card .lbl{font-size:.74em;color:var(--text2);margin-top:4px;font-weight:500}
+.faq-item{padding:14px 0;border-bottom:1px solid var(--border)}.faq-item:last-child{border-bottom:none}
+.faq-q{font-weight:700;color:var(--accent);font-size:.95em;margin-bottom:4px}
+.faq-a{font-size:.88em;color:var(--text2);line-height:1.7}
+
+@media(max-width:768px){.slide-inner{padding:0 24px 40px}.slide-num{font-size:80px;right:24px;top:90px}.grid-2,.grid-3{grid-template-columns:1fr}.dot-nav{display:none}.hero-section{padding:80px 24px 40px}.hero-points{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<p>正在跳转到 <a href="tooltips.html">Better_Experie 功能说明书</a>…</p>
+
+<header class="fixed-header">
+  <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})">Better<span>_</span>Experie</div>
+  <input class="search-bar" id="global-search" style="width:280px;margin:0" placeholder="搜索操作符...">
+</header>
+<div class="progress-track"></div><div class="progress-bar" id="progress-bar" style="width:0%"></div>
+<nav class="dot-nav" id="dot-nav"></nav>
+
+<div id="tooltip" class="tooltip"></div>
+
+<!-- ========== HERO ========== -->
+<div class="slide" id="s0" style="border-bottom:none">
+  <div class="slide-inner" style="padding-top:40px">
+    <div class="hero-section">
+      <h1>还在<em>忍受</em> Blender 的琐碎操作？</h1>
+      <p class="hero-pain">在 Blender 里切换相机要点8次鼠标、调个渐变要逐个拖色标、VSE 对齐片段要手动计算偏移量…… Better_Experie 把这些问题一次性解决。</p>
+      <div class="stats-row">
+        <div class="stat-card"><div class="val">100+</div><div class="lbl">操作符</div></div>
+        <div class="stat-card"><div class="val">7</div><div class="lbl">覆盖编辑器</div></div>
+        <div class="stat-card"><div class="val">2</div><div class="lbl">语言</div></div>
+        <div class="stat-card"><div class="val">4.2</div><div class="lbl">最低版本</div></div>
+        <div class="stat-card"><div class="val">0.0.1</div><div class="lbl">版本</div></div>
+      </div>
+      <div class="hero-points">
+        <div class="hero-point"><div class="icon">🎯</div><h4>零学习成本</h4><p>无独立面板，全部注入到右键菜单和编辑器菜单中，用一次就记住</p></div>
+        <div class="hero-point"><div class="icon">⚡</div><h4>一个动作完成</h4><p>批量重命名、一键烘焙、镜像对象、压实轨道——本来要10步的操作现在1步</p></div>
+        <div class="hero-point"><div class="icon">🧩</div><h4>模块化集成</h4><p>偏好设置里按需开关功能，不影响启动速度，需要什么开什么</p></div>
+        <div class="hero-point"><div class="icon">🤖</div><h4>GPU 加速体验</h4><p>节点烘焙、图像预览、拓扑 HUD 均用 GPU 渲染，不卡界面</p></div>
+      </div>
+      <p style="margin-top:24px;color:var(--text2);font-size:.86em">作者：来一点咖啡吗 (rara) · <a href="https://space.bilibili.com/27284213">B站主页</a> · GPL-3.0</p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 偏好设置 ========== -->
+<div class="slide" id="s-prefs">
+  <div class="slide-num">01</div>
+  <div class="slide-inner">
+    <div class="slide-head"><h2>偏好设置</h2><div class="breadcrumb"><span>编辑</span> → <span>偏好设置</span> → <span>插件</span> → <span>Better_Experie</span></div></div>
+    <div class="slide-body">
+      <table>
+        <thead><tr><th>属性</th><th>默认</th><th>详细说明</th></tr></thead>
+        <tbody>
+          <tr><td>filebrowser_show_explorer_heder</td><td>ON</td><td>在文件浏览器顶部路径栏下方插入一行快捷按钮，一键跳转到资源管理器当前目录</td></tr>
+          <tr><td>show_empty_wireframe_hud</td><td>OFF</td><td>开启后在 3D 视图中为所有有子级的空物体显示<strong>边界框线框叠加</strong>，方便识别空物体组的范围</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 全功能目录 ========== -->
+<div class="slide" id="s-all">
+  <div class="slide-inner">
+    <div class="slide-head"><h2>全部功能</h2><p class="subtitle">悬停卡片查看详细说明 · 点击标签筛选：<span class="tag hi">高频</span> <span class="tag adv">进阶</span> <span class="tag sys">系统</span> <span class="tag dbg">调试</span></p></div>
+    <div class="slide-body">
+      <div class="search-bar" style="margin-bottom:12px">
+        <span class="icon">🔍</span><input type="text" id="local-search" placeholder="搜索操作符名称或功能描述..."><span class="count" id="search-count"></span>
+      </div>
+      <div class="filter-legend">
+        <label><input type="checkbox" class="tag-filter" data-tag="hi" checked> 高频</label>
+        <label><input type="checkbox" class="tag-filter" data-tag="adv" checked> 进阶</label>
+        <label><input type="checkbox" class="tag-filter" data-tag="sys" checked> 系统</label>
+        <label><input type="checkbox" class="tag-filter" data-tag="dbg" checked> 调试</label>
+        <span id="no-results" style="display:none;color:var(--hi);font-weight:600">无匹配结果</span>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">文件浏览器</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="hi" data-loc="文件浏览器 → 右键菜单 → 更好的体验" data-label="快速跳转到资源管理器文件夹" data-detail="将 Blender 文件浏览器当前路径跳转到系统资源管理器（Windows/Mac）正在打开的文件夹，一键同步路径" data-idname="better_experie.quick_set_directory" data-keys="无修饰键"><div class="op">快速跳转到资源管理器文件夹<span class="tag hi">高频</span></div><div class="desc">快速跳转到资源管理器文件夹</div></div>
+        <div class="card" data-tags="adv" data-loc="文件浏览器 → 右键菜单 → 更好的体验" data-label="重新扫描系统所有打开的资源管理器窗口" data-detail="扫描操作系统中所有打开的文件资源管理器窗口的当前路径，刷新缓存以供快速跳转使用" data-idname="better_experie.refresh_explorer_cache" data-keys="无修饰键"><div class="op">重新扫描系统所有打开的资源管理器窗口<span class="tag adv">进阶</span></div><div class="desc">重新扫描所有打开的资源管理器窗口</div></div>
+        <div class="card" data-tags="adv" data-loc="文件浏览器 → 顶部标题栏" data-label="切换标题栏显示" data-detail="在偏好设置中控制是否在文件浏览器顶部显示资源管理器快捷跳转栏" data-idname="better_experie.toggle_explorer_header" data-keys="无修饰键"><div class="op">切换标题栏显示<span class="tag adv">进阶</span></div><div class="desc">切换标题栏显示</div></div>
+        <div class="card" data-tags="hi" data-loc="文件浏览器 → 右键菜单 → 更好的体验" data-label="批量重命名" data-detail="批量重命名指定文件夹内的文件。支持三种模式：查找替换（含正则表达式）、添加前缀/后缀、自动编号（自定义起始数字和位数）" data-idname="better_experie.batch_rename" data-keys="无修饰键"><div class="op">批量重命名<span class="tag hi">高频</span></div><div class="desc">批量重命名（查找替换/前缀后缀/编号/正则）</div></div>
+        <div class="card" data-tags="adv" data-loc="文件浏览器 → 右键菜单 → 更好的体验" data-label="生成文件树" data-detail="将当前文件夹的完整目录结构输出到 Blender 文本编辑器中，方便查看和记录项目文件组织" data-idname="better_experie.generate_file_tree" data-keys="无修饰键"><div class="op">生成文件树<span class="tag adv">进阶</span></div><div class="desc">生成文件树输出到文本编辑器</div></div>
+        <div class="card" data-tags="adv" data-loc="文件浏览器 → 右键菜单 → 更好的体验" data-label="在系统资源管理器中打开所选文件夹" data-detail="在操作系统的文件管理器（资源管理器/Finder）中打开当前选中的文件夹" data-idname="better_experie.jump_selected_folder" data-keys="无修饰键"><div class="op">在系统资源管理器中打开所选文件夹<span class="tag adv">进阶</span></div><div class="desc">在系统资源管理器中打开所选文件夹</div></div>
+        <div class="card" data-tags="hi" data-loc="文件浏览器 → 右键菜单 → 更好的体验" data-label="在递归视图中跳转到文件所在层级" data-detail="在文件浏览器的递归视图中，自动展开并定位到当前选中文件的所在层级目录" data-idname="better_experie.jump_to_file_location" data-keys="无修饰键"><div class="op">在递归视图中跳转到文件所在层级<span class="tag hi">高频</span></div><div class="desc">递归视图中跳转到文件所在层级</div></div>
+        <div class="card" data-tags="adv" data-loc="文件浏览器 → 右键菜单 → 更好的体验" data-label="跳转到项目/输出目录" data-detail="将文件浏览器快速跳转到 Blender 当前项目的目录或渲染输出目录" data-idname="better_experie.open_and_jump_to_folder" data-keys="无修饰键"><div class="op">跳转到项目/输出目录<span class="tag adv">进阶</span></div><div class="desc">跳转到项目/输出目录</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">颜色渐变 (Color Ramp)</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="翻转色标位置" data-detail="将所有色标的位置在 0~1 范围内做镜像翻转，原 0.2 变成 0.8，渐变方向逆转" data-idname="better_experie.color_ramp_flip_positions" data-keys="无修饰键"><div class="op">翻转色标位置<span class="tag hi">高频</span></div><div class="desc">翻转色标位置（0 ↔ 1 镜像）</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="反转所有色标 RGB" data-detail="将渐变中每个色标的 RGB 颜色值取反（R→255-R），Alpha 通道保持不变" data-idname="better_experie.color_ramp_invert_colors" data-keys="无修饰键"><div class="op">反转所有色标 RGB<span class="tag hi">高频</span></div><div class="desc">反转所有色标 RGB</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="双色标（复制并镜像）" data-detail="将现有所有色标复制一份，并镜像到另一端，实现对称的双倍渐变效果" data-idname="better_experie.color_ramp_double" data-keys="无修饰键"><div class="op">双色标（复制并镜像）<span class="tag hi">高频</span></div><div class="desc">双色标：复制并镜像到另一端</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="均匀散布色标位置" data-detail="将所有色标的位置等间距地重新分布在 0~1 区间内" data-idname="better_experie.color_ramp_even_distribution" data-keys="无修饰键"><div class="op">均匀散布色标位置<span class="tag adv">进阶</span></div><div class="desc">均匀散布色标位置</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="归一散布到 0~1" data-detail="将色标位置按比例缩放到填满 0~1 区间，保持相对间距比例不变" data-idname="better_experie.color_ramp_normalize_positions" data-keys="无修饰键"><div class="op">归一散布到 0~1<span class="tag adv">进阶</span></div><div class="desc">归一散布到 0~1 范围</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="色标重采样" data-detail="将当前渐变按指定数量重新采样为 N 个等距色标，保留 Blender 原生颜色插值结果" data-idname="better_experie.color_ramp_resample" data-keys="无修饰键"><div class="op">色标重采样<span class="tag adv">进阶</span></div><div class="desc">色标重采样为指定数量</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="清理/精简色标" data-detail="使用 RDP 算法或按最小间距合并来精简冗余色标，也可按范围删除指定区域的色标" data-idname="better_experie.color_ramp_clean" data-keys="无修饰键"><div class="op">清理/精简色标<span class="tag hi">高频</span></div><div class="desc">清理/精简（RDP 简化 / 距离合并）</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="渐变平滑/对比" data-detail="调节色标位置或颜色值的平滑度和对比度，让渐变过渡更柔和或更锐利" data-idname="better_experie.color_ramp_smooth_contrast" data-keys="无修饰键"><div class="op">渐变平滑/对比<span class="tag adv">进阶</span></div><div class="desc">渐变平滑/对比调节</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="随机渐变" data-detail="随机扰动色标的位置或颜色值，快速生成随机渐变效果" data-idname="better_experie.color_ramp_randomize" data-keys="无修饰键"><div class="op">随机渐变<span class="tag adv">进阶</span></div><div class="desc">随机渐变（位置或颜色）</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="染色" data-detail="按指定系数将目标颜色线性混合到渐变的所有色标上，实现整体染色效果" data-idname="better_experie.color_ramp_color_mix" data-keys="无修饰键"><div class="op">染色<span class="tag adv">进阶</span></div><div class="desc">染色：目标颜色混合到所有色标</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具" data-label="复制/粘贴渐变数据" data-detail="将选中节点的渐变数据序列化为 JSON 复制到剪贴板；从剪贴板读取 JSON 并应用到所有选中节点的渐变" data-idname="better_experie.color_ramp_copy / better_experie.color_ramp_paste" data-keys="无修饰键"><div class="op">复制/粘贴渐变数据<span class="tag hi">高频</span></div><div class="desc">复制/粘贴渐变数据 (JSON)</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">渐变库 &amp; 曲线工具</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 颜色渐变工具 → 渐变库" data-label="渐变库弹窗" data-detail="打开一个弹窗浏览所有已保存的颜色渐变预设，支持缩略图预览、按名称/颜色/历史搜索，点击即可一键应用到当前选中节点的渐变" data-idname="better_experie.ramp_lib_popup" data-keys="无修饰键"><div class="op">渐变库弹窗<span class="tag hi">高频</span></div><div class="desc">渐变库弹窗（缩略图+搜索+一键应用）</div></div>
+        <div class="card" data-tags="hi" data-loc="渐变库弹窗内" data-label="保存/应用渐变预设" data-detail="将当前颜色渐变保存为可复用的预设，存储于 data/ramp_lib.blend；应用预设将替换当前选中节点的渐变" data-idname="better_experie.ramp_lib_save / better_experie.ramp_lib_apply" data-keys="无修饰键"><div class="op">保存/应用渐变预设<span class="tag hi">高频</span></div><div class="desc">保存/应用渐变预设</div></div>
+        <div class="card" data-tags="adv" data-loc="渐变库弹窗内" data-label="重命名/删除预设" data-detail="在渐变库弹窗中直接重命名或永久删除用户创建的渐变预设" data-idname="better_experie.ramp_lib_rename / better_experie.ramp_lib_delete" data-keys="无修饰键"><div class="op">重命名/删除预设<span class="tag adv">进阶</span></div><div class="desc">重命名/删除预设</div></div>
+        <div class="card" data-tags="adv" data-loc="渐变库弹窗内" data-label="导出/导入 .blend 渐变库" data-detail="将当前所有预设导出为 .blend 文件以便分享或备份；从 .blend 文件中导入渐变预设（会自动提取存储的渐变数据）" data-idname="better_experie.ramp_lib_export / better_experie.ramp_lib_import" data-keys="无修饰键"><div class="op">导出/导入 .blend 渐变库<span class="tag adv">进阶</span></div><div class="desc">导出/导入 .blend 渐变库</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 曲线节点工具" data-label="16种数学预设曲线" data-detail="使用内置数学公式（线性/正弦/指数/对数/阶梯/伽马/增益等）批量设置曲线控制点；也支持输入自定义公式" data-idname="better_experie.apply_curve_preset" data-keys="无修饰键"><div class="op">16种数学预设曲线<span class="tag hi">高频</span></div><div class="desc">16种数学预设曲线+自定义公式</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 曲线节点工具" data-label="复制/粘贴曲线数据" data-detail="将选中曲线节点的控制点数据序列化为 JSON 并复制/粘贴，支持跨节点、跨场景传递" data-idname="better_experie.copy_curve / better_experie.paste_curve" data-keys="无修饰键"><div class="op">复制/粘贴曲线数据<span class="tag hi">高频</span></div><div class="desc">复制/粘贴曲线数据 (JSON)</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 曲线节点工具" data-label="变换曲线" data-detail="对曲线控制点进行水平翻转、垂直翻转或高级缩放偏移变换" data-idname="better_experie.transform_curve" data-keys="无修饰键"><div class="op">变换曲线<span class="tag adv">进阶</span></div><div class="desc">水平/垂直翻转+缩放/偏移</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 曲线节点工具" data-label="精简/细分控制点" data-detail="RDP 算法精简控制点减少点数，或在控制点间线性插值插入新点增加精度" data-idname="better_experie.simplify_curve / better_experie.subdivide_curve" data-keys="无修饰键"><div class="op">精简/细分控制点<span class="tag adv">进阶</span></div><div class="desc">精简/细分控制点</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 曲线节点工具" data-label="平滑/随机化控制点" data-detail="向相邻控制点的平均值混合实现平滑；随机偏移控制点的 X/Y 位置" data-idname="better_experie.smooth_curve / better_experie.randomize_curve" data-keys="无修饰键"><div class="op">平滑/随机化控制点<span class="tag adv">进阶</span></div><div class="desc">平滑/随机化控制点</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 曲线节点工具" data-label="转换手柄类型" data-detail="统一设置所有控制点的插值手柄类型为自动、矢量或自动钳制" data-idname="better_experie.convert_handle_type" data-keys="无修饰键"><div class="op">转换手柄类型<span class="tag adv">进阶</span></div><div class="desc">转换手柄类型</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 曲线节点工具" data-label="重置通道为默认线性" data-detail="将选中曲线通道的控制点重置为默认线性状态（0到1）" data-idname="better_experie.reset_curve_channel" data-keys="无修饰键"><div class="op">重置通道为默认线性<span class="tag adv">进阶</span></div><div class="desc">重置通道为默认线性</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">图像 / 剪贴板 / 合成器 / 烘焙</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 更好的体验" data-label="剪贴板图像导入节点编辑器" data-detail="将系统剪贴板中的图像直接粘贴为节点编辑器中的图像纹理节点。支持 Adobe 剪贴板、Office 剪贴板、截图、复制的图像文件等" data-idname="better_experie.import_clipboard_image_nodeeditor" data-keys="无修饰键"><div class="op">剪贴板图像导入节点编辑器<span class="tag hi">高频</span></div><div class="desc">剪贴板图像导入节点编辑器</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 添加菜单 → 纹理" data-label="从剪贴板图像生成渐变" data-detail="从系统剪贴板导入图像并自动生成颜色渐变条（Color Ramp），直接提取图像中的色阶分布" data-idname="better_experie.import_clipboard_to_gradient" data-keys="无修饰键"><div class="op">从剪贴板图像生成渐变<span class="tag hi">高频</span></div><div class="desc">从剪贴板图像创建颜色渐变条</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="复制选中节点的图像到系统剪贴板" data-detail="将节点编辑器中选中的图像节点（ShaderNodeTexImage/GeometryNodeImageTexture等）的图像复制到系统剪贴板" data-idname="better_experie.copy_node_image_to_clipboard" data-keys="无修饰键"><div class="op">复制选中节点的图像到系统剪贴板<span class="tag hi">高频</span></div><div class="desc">复制节点图像到系统剪贴板</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="GPU 全屏预览图像节点" data-detail="在节点编辑器中以 GPU 渲染全屏预览选中的图像节点。滚轮缩放、中键平移、Home 复位、ESC 退出" data-idname="better_experie.preview_image_modal" data-keys="无修饰键"><div class="op">GPU 全屏预览图像节点<span class="tag hi">高频</span></div><div class="desc">GPU 全屏预览图像节点 (ESC退出)</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="在外部编辑器打开图像" data-detail="使用操作系统关联的外部图像编辑器（如 Photoshop/GIMP）打开选中节点引用的图像文件进行编辑" data-idname="better_experie.open_in_external_editor" data-keys="无修饰键"><div class="op">在外部编辑器打开图像<span class="tag hi">高频</span></div><div class="desc">在外部编辑器（如 PS）打开图像</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="在内部编辑器打开图像" data-detail="在 Blender 内部图像编辑器中打开选中的图像纹理" data-idname="better_experie.open_in_blender_editor" data-keys="无修饰键"><div class="op">在内部编辑器打开图像<span class="tag adv">进阶</span></div><div class="desc">在内部图像编辑器打开图像</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="打开图像所在文件夹" data-detail="打开选中图像节点所在文件系统文件夹" data-idname="better_experie.open_image_folder" data-keys="无修饰键"><div class="op">打开图像所在文件夹<span class="tag adv">进阶</span></div><div class="desc">打开图像所在文件夹</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="重载选中节点所有图像" data-detail="重新加载选中图像节点引用的所有图像文件，用于外部修改图像后刷新" data-idname="better_experie.reload_image" data-keys="无修饰键"><div class="op">重载选中节点所有图像<span class="tag hi">高频</span></div><div class="desc">重载选中节点所有图像</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → 对象模式右键菜单" data-label="剪贴板图像导入 3D 视口" data-detail="将剪贴板中的图像导入到 3D 视口，创建带材质的平面或图像空物体" data-idname="better_experie.import_clipboard_image_view3d" data-keys="无修饰键"><div class="op">剪贴板图像导入 3D 视口<span class="tag adv">进阶</span></div><div class="desc">剪贴板图像导入 3D 视口</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="依据图像生成渐变" data-detail="模态工具：在图像上拖拽采样线，自动提取 4/8/16/32 个色标生成渐变节点。A 键自动采样、数字键 1-4 快速生成、L 锁定、F 均匀散布、X 删除采样点、Enter 生成" data-idname="better_experie.convert_image_to_gradient" data-keys="Shift+A 16点 | Ctrl+A 4点 | A 8点 | L 锁定 | F 均匀 | X 删除 | 1~4 快速 | Esc 退出 | Enter 确认"><div class="op">依据图像生成渐变<span class="tag adv">进阶</span></div><div class="desc">从图像生成渐变（模态+GPU+采样线）</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单（合成器）" data-label="一键生成 File Output 节点" data-detail="为合成器中选中的节点自动创建 File Output 输出节点并连线，快速建立渲染输出通道" data-idname="better_experie.compositor_add_file_output" data-keys="无修饰键"><div class="op">一键生成 File Output 节点<span class="tag adv">进阶</span></div><div class="desc">一键生成 File Output 节点</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单（合成器）" data-label="GPU 加速烘焙合成器节点" data-detail="将合成器节点的输出烘焙到内存或导出为图像文件，支持 GPU 加速和稳定性检测" data-idname="better_experie.compositor_bake_node" data-keys="无修饰键"><div class="op">GPU 加速烘焙合成器节点<span class="tag hi">高频</span></div><div class="desc">GPU 加速烘焙合成器节点</div></div>
+        <div class="card" data-tags="hi" data-loc="节点编辑器 → 右键菜单（着色器）" data-label="Cycles 烘焙着色器节点为纹理" data-detail="通过 Cycles 渲染器将选中着色器节点的输出烘焙为纹理贴图。支持 UV 模式和平面模式。确保场景已选中活动网格且节点树已选中活动节点" data-idname="better_experie.bake_a_node" data-keys="无修饰键"><div class="op">Cycles 烘焙着色器节点为纹理<span class="tag hi">高频</span></div><div class="desc">Cycles 烘焙着色器输出为纹理</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 右键菜单 → 纹理节点工具" data-label="环境纹理 ↔ 图像纹理转换" data-detail="将 ShaderNodeTexEnvironment 和 ShaderNodeTexImage 之间互相转换，方便切换 HDR 环境贴图和普通图像纹理" data-idname="better_experie.convert_environment_and_image" data-keys="无修饰键"><div class="op">环境纹理 ↔ 图像纹理转换<span class="tag adv">进阶</span></div><div class="desc">环境纹理 ↔ 图像纹理互相转换</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 覆盖层面板" data-label="交互式节点树小地图" data-detail="在节点编辑器左下角显示整个节点树的缩略小地图。鼠标左键点击小地图中的节点位置即可快速跳转到对应区域（需在偏好设置中开启 show_node_minimap）" data-idname="better_experie.minimap_interact" data-keys="无修饰键"><div class="op">交互式节点树小地图<span class="tag adv">进阶</span></div><div class="desc">交互式节点树小地图（点击跳转）</div></div>
+        <div class="card" data-tags="adv" data-loc="节点编辑器 → 视图菜单" data-label="设置节点位置为视口原点" data-detail="将当前选中节点的位置设为节点树的视口原点（0,0），并重新排列所有节点。常用于整理节点布局" data-idname="better_experie.set_node_tree_origin" data-keys="无修饰键"><div class="op">设置节点位置为视口原点<span class="tag adv">进阶</span></div><div class="desc">设置节点位置为节点树视口原点</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">3D 视图</h3>
+      <div class="callout note" style="margin-bottom:12px">对象/网格卡片式高级选择器（AND/OR/NOT 规则）· 拓扑 HUD 实时 GPU 叠加 · 模态融并（GPU 预览+Tab 切换）· 顶部栏相机快速切换</div>
+      <div class="cards op-list">
+        <div class="card" data-tags="hi" data-loc="3D 视图 → N面板 → 游标栏" data-label="移动 3D 游标到选中元素中心" data-detail="将 3D 游标移动到当前选中元素的中心位置。选中单个元素时保持原旋转；选中多个时自动计算平均旋转并对齐游标方向" data-idname="better_experie.cursor_to_selected" data-keys="无修饰键"><div class="op">移动 3D 游标到选中元素中心<span class="tag hi">高频</span></div><div class="desc">移动 3D 游标到选中元素中心</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → N面板 → 游标栏" data-label="游标快照管理" data-detail="保存当前 3D 游标位置为快照、恢复到已保存的快照位置、或删除快照记录" data-idname="better_experie.manage_cursor_snapshot" data-keys="无修饰键"><div class="op">游标快照管理<span class="tag adv">进阶</span></div><div class="desc">游标快照管理（保存/恢复/删除）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → 合并菜单 (M键)" data-label="持续顶点融并" data-detail="可视化地持续融并距离最近的顶点，支持 Tab 键切换三种模式（中心点融并/选中→非选中/非选中→选中）。左键确认融并，Ctrl+Z 撤销，ESC 退出" data-idname="better_experie.modal_weld" data-keys="Tab 切换模式 | Ctrl+Z 撤销 | Shift+Ctrl+Z 重做 | 左键执行 | Esc/右键 退出"><div class="op">持续顶点融并<span class="tag hi">高频</span></div><div class="desc">持续顶点融并</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → 添加菜单 → 网格" data-label="从预设网格库导入基础形状" data-detail="从 data/obj_lib.blend 中导入预设的基础网格（立方体/球体/圆柱等）。默认复用已有数据避免重复；Shift+点击则强制创建独立副本" data-idname="better_experie.import_lib_mesh" data-keys="Shift+点击 强制创建独立副本"><div class="op">从预设网格库导入基础形状<span class="tag adv">进阶</span></div><div class="desc">从预设网格库导入基础形状</div></div>
+        <div class="card" data-tags="hi" data-loc="3D 视图 → Object → Modifiers 菜单" data-label="一键应用所有修改器" data-detail="遍历所有选中的物体，尝试对每个物体的所有修改器执行 Apply 操作" data-idname="better_experie.apply_all_modifiers" data-keys="无修饰键"><div class="op">一键应用所有修改器<span class="tag hi">高频</span></div><div class="desc">一键应用对象所有修改器</div></div>
+        <div class="card" data-tags="hi" data-loc="3D 视图 → Object → Mirror 菜单" data-label="镜像选中的物体对象" data-detail="以指定的坐标系和轴心点为基准，镜像选中的物体对象。含 GPU 可视化轴线预览" data-idname="better_experie.object_mirror" data-keys="无修饰键"><div class="op">镜像选中的物体对象<span class="tag hi">高频</span></div><div class="desc">镜像对象（含 GPU 轴线预览）</div></div>
+        <div class="card" data-tags="hi" data-loc="3D 视图 → View → Cameras 菜单" data-label="在当前视图创建新相机" data-detail="从当前 3D 视口的视角创建新的相机对象，自动对齐视图方向" data-idname="better_experie.create_new_camera" data-keys="无修饰键"><div class="op">在当前视图创建新相机<span class="tag hi">高频</span></div><div class="desc">从当前视图创建新相机</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → View → Viewpoint 菜单" data-label="切换到最近的正交视图" data-detail="计算当前视角与 6 个正交方向（前/后/左/右/上/下）的夹角，自动切换到最近的一个；如果已处于正交视图则还原为透视模式" data-idname="better_experie.switch_to_nearest_orthogonal" data-keys="无修饰键"><div class="op">切换到最近的正交视图<span class="tag adv">进阶</span></div><div class="desc">切换到最近的正交视图</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Select → Loops 菜单" data-label="智能闭合循环线" data-detail="自动配对最近的端点并寻找最短路径闭合，避开已选边。适合在多线段之间快速创建闭合连接" data-idname="better_experie.mesh_smart_close_loop" data-keys="无修饰键"><div class="op">智能闭合循环线<span class="tag hi">高频</span></div><div class="desc">智能封闭环形边</div></div>
+        <div class="card" data-tags="hi" data-loc="3D 视图 → Object/编辑模式 → Show/Hide 菜单" data-label="对调隐藏状态" data-detail="将当前隐藏的元素变为可见、当前可见的元素变为隐藏，一键反转可见性" data-idname="better_experie.toggle_hidden" data-keys="无修饰键"><div class="op">对调隐藏状态<span class="tag hi">高频</span></div><div class="desc">切换选中对象隐藏/显示</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select → Loops 菜单" data-label="按封闭环选择区域" data-detail="模态工具：基于已选边界边划分网格区域，点击选择/反选区域。支持 Shift 追加、Ctrl 排除、点击空白区域清除" data-idname="better_experie.select_enclosed_regions" data-keys="Shift 追加 | Ctrl/Command 排除 | 无修饰键 替换 | 点击空白 清除全部"><div class="op">按封闭环选择区域<span class="tag adv">进阶</span></div><div class="desc">按封闭环选择区域</div></div>
+        <div class="card" data-tags="hi" data-loc="3D 视图 → 标题栏编辑菜单 / 右键菜单" data-label="复制/粘贴网格元素" data-detail="编辑模式下，将选中的网格/骨骼/曲线元素复制到内部剪贴板；从剪贴板粘贴元素并选中" data-idname="better_experie.copy_elements / better_experie.paste_elements" data-keys="无修饰键"><div class="op">复制/粘贴网格元素<span class="tag hi">高频</span></div><div class="desc">复制/粘贴网格元素（面/边/顶点）</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → Object → Clean Up 菜单" data-label="清理视图着色" data-detail="将选中物体在实体模式下材质预览的颜色还原为默认色" data-idname="better_experie.clear_viewport_shading" data-keys="无修饰键"><div class="op">清理视图着色<span class="tag adv">进阶</span></div><div class="desc">清除视口着色颜色</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Normals 菜单" data-label="以视口方向反转法线" data-detail="将选中的网格面的法线方向统一翻转为朝向当前视口观察方向" data-idname="better_experie.flip_normals_by_view" data-keys="无修饰键"><div class="op">以视口方向反转法线<span class="tag hi">高频</span></div><div class="desc">按视图方向翻转法线</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → View → Viewpoint / Align 菜单" data-label="对齐视图到面法线" data-detail="模态工具：鼠标悬停在网格面上预览该面的法线方向，左键确认后将视图正交对齐到该面的法线" data-idname="better_experie.align_view_to_normal" data-keys="无修饰键"><div class="op">对齐视图到面法线<span class="tag adv">进阶</span></div><div class="desc">对齐视图到选中面法线</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式(顶点) → Merge 菜单" data-label="焊接顶点到最近的边" data-detail="将选中的顶点移动到最近的边上并焊接（需要处于顶点选择模式）" data-idname="better_experie.weld_verts_to_edges" data-keys="无修饰键"><div class="op">焊接顶点到最近的边<span class="tag adv">进阶</span></div><div class="desc">焊接顶点到最近的边</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Split 菜单" data-label="分离边为曲线" data-detail="将选中的网格边线分离为独立的曲线对象，方便将网格边转换为贝塞尔曲线" data-idname="better_experie.separate_edges_to_curve" data-keys="无修饰键"><div class="op">分离边为曲线<span class="tag adv">进阶</span></div><div class="desc">分离边为曲线对象</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → Object → Clear 菜单" data-label="修复应用旋转后的变换" data-detail="使用协方差 SVD 分解重算物体旋转（曲面模式）或基于面法线 K-Means 找厚度方向（硬表面模式），修复 Apply Rotation 后坐标轴错乱问题" data-idname="better_experie.fix_applied_rotation" data-keys="无修饰键"><div class="op">修复应用旋转后的变换<span class="tag adv">进阶</span></div><div class="desc">修复应用旋转后的变换</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → Object → Apply 菜单" data-label="清空增量变换" data-detail="将增量变换（Delta Transform）叠加回物体的原始变换中，并将增量变换归零" data-idname="better_experie.clear_delta_transform" data-keys="无修饰键"><div class="op">清空增量变换<span class="tag adv">进阶</span></div><div class="desc">清空增量变换</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → 覆盖层面板" data-label="空物体线框 HUD" data-detail="在 3D 视图中为所有拥有子级的空物体渲染边界框线框叠加，方便识别空物体组的范围。需要先在偏好设置中启用" data-idname="better_experie.empty_wireframe" data-keys="无修饰键"><div class="op">空物体线框 HUD<span class="tag adv">进阶</span></div><div class="desc">空物体线框 HUD</div></div>
+        <div class="card" data-tags="adv" data-loc="属性 → Camera Data → Background Images" data-label="相机背景设置" data-detail="为活动相机设置纯色视口背景（白色或黑色），仅作用于该相机的视口覆盖显示，不影响最终渲染结果" data-idname="better_experie.camera_background" data-keys="无修饰键"><div class="op">相机背景设置<span class="tag adv">进阶</span></div><div class="desc">为相机设置背景图像</div></div>
+        <div class="card" data-tags="hi" data-loc="顶部栏 → 右侧区域" data-label="顶部栏活动相机下拉菜单" data-detail="在 Blender 顶部栏右侧显示一个下拉菜单，列出场景中所有相机对象（包含完整层级路径如 [集合名]:父级名\相机名），快速切换活动相机" data-idname="" data-keys="无修饰键"><div class="op">顶部栏活动相机下拉菜单<span class="tag hi">高频</span></div><div class="desc">顶部栏右侧下拉菜单（含层级路径）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Select → Loops 菜单" data-label="循环/并排边扩选" data-detail="沿 Loop（循环边）或 Ring（并排边）方向扩选，支持滑动、侧移与间隔模式，从当前选中边快速拓展边链" data-idname="better_experie.edge_loop_select" data-keys="无修饰键"><div class="op">循环/并排边扩选<span class="tag hi">高频</span></div><div class="desc">循环/并排边扩选（滑动/侧移/间隔）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Select → Loops 菜单" data-label="循环面扩选" data-detail="从选中的面出发沿 U/V 方向扩选连续四边面，支持滑动、侧移与间隔模式，快速选中整条面带" data-idname="better_experie.face_loop_select" data-keys="无修饰键"><div class="op">循环面扩选<span class="tag hi">高频</span></div><div class="desc">循环面扩选（U/V 方向）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Select → More/Less 菜单" data-label="自定义孤岛扩选" data-detail="按阶数向外扩选或向内收缩，可启用屏障边（法向/材质/缝合/锐边/UV）划分孤岛，扩选不会跨越屏障，实现精准的区域扩散" data-idname="better_experie.custom_island_expand" data-keys="无修饰键"><div class="op">自定义孤岛扩选<span class="tag hi">高频</span></div><div class="desc">自定义孤岛扩选/收缩（屏障边隔离）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Select → By Trait 菜单" data-label="选择锐边/边界连续链" data-detail="交互式选择锐边或边界链：按住左键刷选，支持 Shift 加选 Ctrl 减选、Tab 切换模式、Alt 切换分叉行为，快速追踪特征边" data-idname="better_experie.select_sharp_chain" data-keys="左键按住 刷选 | Shift 加选 | Ctrl 减选 | Tab 切换模式 | Alt 切换分叉"><div class="op">选择锐边/边界连续链<span class="tag hi">高频</span></div><div class="desc">选择锐边/边界连续链（刷选）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select → By Trait 菜单" data-label="选择面区域（锐边分界）" data-detail="以锐边作为分界线划分面区域，左键按住刷选整片区域（Shift 加选 Ctrl 减选），快速选中被锐边分隔的区域" data-idname="better_experie.select_face_region" data-keys="左键按住 刷选 | Shift 加选 | Ctrl 减选"><div class="op">选择面区域（锐边分界）<span class="tag adv">进阶</span></div><div class="desc">选择面区域（锐边分界，刷选）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Select → Loops → 非流形循环选取" data-label="选择并排边环（批处理）" data-detail="从当前选中的边出发，沿并排（Ring）方向几何算法扩选至非流形区域，一键选中整条边环" data-idname="better_experie.select_edge_ring_geo" data-keys="无修饰键"><div class="op">选择并排边环（批处理）<span class="tag hi">高频</span></div><div class="desc">选择并排边环（批处理）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select → Loops → 非流形循环选取" data-label="选择并排边环（交互）" data-detail="鼠标悬浮预览并排边环，左键选中（Shift 加选 Ctrl 减选），右键取消。悬停即可实时预览待选边环" data-idname="better_experie.select_edge_ring_interactive" data-keys="左键 选中 | Shift 加选 | Ctrl 减选 | 右键 取消"><div class="op">选择并排边环（交互）<span class="tag adv">进阶</span></div><div class="desc">选择并排边环（交互预览）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select → Loops → 非流形循环选取" data-label="选择非流形循环边（批处理）" data-detail="从当前选中的边出发，沿循环（Loop）方向追溯选择非流形链，快速选中非流形区域的关键路径" data-idname="better_experie.select_nonmanifold_edge_loop_batch" data-keys="无修饰键"><div class="op">选择非流形循环边（批处理）<span class="tag adv">进阶</span></div><div class="desc">选择非流形循环边（批处理）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select → Loops → 非流形循环选取" data-label="选择非流形循环边（交互）" data-detail="从当前选中的边出发，沿循环（Loop）方向追溯选择非流形链。交互式悬浮预览，左键确认" data-idname="better_experie.select_nonmanifold_edge_loop" data-keys="左键 选中 | Shift 加选 | Ctrl 减选"><div class="op">选择非流形循环边（交互）<span class="tag adv">进阶</span></div><div class="desc">选择非流形循环边（交互预览）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select → Loops → 非流形循环选取" data-label="选择非流形循环面（批处理）" data-detail="从当前选中的面出发，沿并排（Ring）方向自动选中整条面环，一键选中非流形区域的整圈面" data-idname="better_experie.select_face_ring_batch" data-keys="无修饰键"><div class="op">选择非流形循环面（批处理）<span class="tag adv">进阶</span></div><div class="desc">选择非流形循环面（批处理）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select → Loops → 非流形循环选取" data-label="选择非流形循环面（交互）" data-detail="点击网格后沿并排（Ring）方向选中整条面环，支持方向/次数/角度/锐边/三角面限制，Shift 加选 Ctrl 减选" data-idname="better_experie.select_face_ring_modal" data-keys="点击 选中 | Shift 加选 | Ctrl 减选"><div class="op">选择非流形循环面（交互）<span class="tag adv">进阶</span></div><div class="desc">选择非流形循环面（交互+限制条件）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式(面) → Merge 菜单" data-label="焊接共面" data-detail="借助布尔并集将选中的共面/重叠面焊接为一个面。自动隐藏未选中面来限定范围，完成后恢复可见性" data-idname="better_experie.weld_coplanar" data-keys="无修饰键"><div class="op">焊接共面<span class="tag hi">高频</span></div><div class="desc">焊接共面（布尔并集）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式(边) → Merge 菜单" data-label="焊接边到面" data-detail="将选中的边焊接到其附近的面（face_split_by_edges），切分面并选中新产生的边" data-idname="better_experie.weld_edges_to_faces" data-keys="无修饰键"><div class="op">焊接边到面<span class="tag hi">高频</span></div><div class="desc">焊接边到面</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式(边) → Merge 菜单" data-label="交点打断" data-detail="检测选中边与网格其他边的交点，在交点处打断（选中边）。批量检测所有边线交叉并切割" data-idname="better_experie.intersect_edges" data-keys="无修饰键"><div class="op">交点打断<span class="tag hi">高频</span></div><div class="desc">交点打断（检测交叉并切割）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Normals 菜单" data-label="重算矢量" data-detail="重新计算选中项的矢量，可处理非流形面导致的矢量阴影问题" data-idname="better_experie.reset_local_normals" data-keys="无修饰键"><div class="op">重算矢量<span class="tag adv">进阶</span></div><div class="desc">重算矢量（修复非流形阴影）</div></div>
+        <div class="card" data-tags="hi" data-loc="编辑模式 → Vertex Group 菜单" data-label="智能顶点组" data-detail="快速为活动网格添加新的顶点组，支持自定义命名。回车确认添加并命名顶点组" data-idname="better_experie.mesh_add_vertex_group" data-keys="回车 确认"><div class="op">智能顶点组<span class="tag hi">高频</span></div><div class="desc">智能顶点组（快速添加+命名）</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → Object → Modifiers 菜单" data-label="批量处理修改器" data-detail="点击弹出处理选项（支持 Shift/Ctrl 快捷键预设），对选中物体的修改器进行批量操作" data-idname="better_experie.batch_process_modifiers" data-keys="Shift/Ctrl 快捷键预设"><div class="op">批量处理修改器<span class="tag adv">进阶</span></div><div class="desc">批量处理修改器</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → Object → Clear 菜单" data-label="修复应用后的旋转（硬表面）" data-detail="基于面法线 K-Means 找厚度方向 + 2D 旋转卡壳找长边，优化 L 形网格的旋转修复（适合硬表面模型）" data-idname="better_experie.fix_applied_rotation_by_normals" data-keys="无修饰键"><div class="op">修复应用后的旋转（硬表面）<span class="tag adv">进阶</span></div><div class="desc">修复应用后的旋转（硬表面/法线方向）</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → N面板 → Item / 属性 → 变换" data-label="父级变换面板" data-detail="在属性编辑器（物体变换下）和 3D 视图 N 面板中显示父级增量变换（位移/旋转/缩放），按 C4D 方式直接编辑相对于父级的变换" data-idname="" data-keys="无修饰键"><div class="op">父级变换面板<span class="tag adv">进阶</span></div><div class="desc">父级增量变换面板（C4D 风格）</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → N面板 → Item → 父级变换面板" data-label="复位相对变换" data-detail="将物体相对于父级的变换归零。Ctrl/Shift/Alt+点击时对所有选中物体执行" data-idname="better_experie.reset_c4d_transform" data-keys="Ctrl/Shift/Alt+点击 应用到全部选中"><div class="op">复位相对变换<span class="tag adv">进阶</span></div><div class="desc">复位相对变换（归零父级变换）</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → Object/UV 菜单" data-label="可视化 UV 投射" data-detail="通过 Gizmo 实时可视化 UV 投射：三平面/平面/球体/圆柱体四种模式，Tab 切换模式 F 适配物体 ESC 退出" data-idname="better_experie.visual_uv_projection" data-keys="Tab 切换模式 | F 适配物体 | Esc 退出"><div class="op">可视化 UV 投射<span class="tag adv">进阶</span></div><div class="desc">可视化 UV 投射（Gizmo 实时预览）</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → 覆盖层面板" data-label="拓扑 HUD" data-detail="在 3D 视图中实时 GPU 检测并高亮拓扑问题（非水密边、畸形面、翻转法线面等），点击即可定位检查项" data-idname="better_experie.topology_hud" data-keys="无修饰键"><div class="op">拓扑 HUD<span class="tag adv">进阶</span></div><div class="desc">拓扑 HUD（GPU 实时检测）</div></div>
+        <div class="card" data-tags="adv" data-loc="3D 视图 → 覆盖层 → 拓扑 HUD 设置面板" data-label="选择拓扑" data-detail="根据当前 HUD 检测结果，快速选中特定拓扑类型的元素（非水密边、畸形面、翻转法线面等）。点击执行选择，根据当前拓扑类型快速定位" data-idname="better_experie.topology_select" data-keys="点击 执行选择"><div class="op">选择拓扑<span class="tag adv">进阶</span></div><div class="desc">选择拓扑（根据 HUD 检测结果）</div></div>
+        <div class="card" data-tags="adv" data-loc="属性 → Camera Data → Background Images" data-label="设置相机背景" data-detail="为活动相机设置纯色视口背景（白/黑），仅相机覆盖，不影响最终渲染" data-idname="better_experie.set_camera_bg" data-keys="无修饰键"><div class="op">设置相机背景<span class="tag adv">进阶</span></div><div class="desc">快速设置相机背景（白/黑）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → 顶点组面板" data-label="顶点组快速预览" data-detail="在 3D 视图中高亮显示该顶点组的顶点（1秒渐隐），快速查看顶点组的影响范围" data-idname="better_experie.preview_vertex_group" data-keys="无修饰键"><div class="op">顶点组快速预览<span class="tag adv">进阶</span></div><div class="desc">顶点组快速预览（1秒渐隐）</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → Select 菜单" data-label="网格筛选式选取" data-detail="基于自定义规则卡片批量筛选网格元素（面/边/顶点），支持正则/通配/顶点组/边面数/边角度等多维筛选规则" data-idname="better_experie.mesh_filter_batch_selector" data-keys="无修饰键"><div class="op">网格筛选式选取<span class="tag adv">进阶</span></div><div class="desc">网格筛选式选取（规则卡片）</div></div>
+        <div class="card" data-tags="adv" data-loc="物体模式 → Select 菜单" data-label="物体筛选式选取" data-detail="配置筛选卡片（名称正则/类型/顶点数/集合等）并执行选择，卡片可增删改复制，组合多条件筛选场景对象" data-idname="better_experie.object_filter_batch_selector" data-keys="无修饰键"><div class="op">物体筛选式选取<span class="tag adv">进阶</span></div><div class="desc">物体筛选式选取（卡片规则）</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">网格属性 / 顶点色</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="adv" data-loc="编辑模式 → 属性面板" data-label="写入属性" data-detail="将设定的数值写入到当前活动的网格属性中，支持写入全部或仅所选元素（面/边/顶点）" data-idname="better_experie.mesh_apply_attribute" data-keys="无修饰键"><div class="op">写入属性<span class="tag adv">进阶</span></div><div class="desc">批量写入网格属性</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → 顶点色面板" data-label="应用顶点颜色" data-detail="将指定颜色应用到顶点，支持写入全部或仅所选顶点" data-idname="better_experie.mesh_apply_vertex_color" data-keys="无修饰键"><div class="op">应用顶点颜色<span class="tag adv">进阶</span></div><div class="desc">应用顶点颜色</div></div>
+        <div class="card" data-tags="adv" data-loc="编辑模式 → 顶点色面板" data-label="选中相似颜色" data-detail="选中颜色与当前设定颜色相近的顶点，快速按颜色筛选网格顶点" data-idname="better_experie.mesh_select_similar_vertex_color" data-keys="无修饰键"><div class="op">选中相似颜色<span class="tag adv">进阶</span></div><div class="desc">按相似颜色选择顶点</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">染色工具</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="adv" data-loc="材质属性 → 材质染色工具面板" data-label="随机材质颜色" data-detail="随机为材质的视口预览颜色着色，快速区分多个材质" data-idname="better_experie.material_color_random" data-keys="无修饰键"><div class="op">随机材质颜色<span class="tag adv">进阶</span></div><div class="desc">随机材质颜色</div></div>
+        <div class="card" data-tags="adv" data-loc="材质属性 → 材质染色工具面板" data-label="清理材质颜色" data-detail="还原材质视口颜色为默认色" data-idname="better_experie.material_color_clear" data-keys="无修饰键"><div class="op">清理材质颜色<span class="tag adv">进阶</span></div><div class="desc">清理材质颜色</div></div>
+        <div class="card" data-tags="adv" data-loc="物体属性 → 物体染色工具面板" data-label="随机物体颜色" data-detail="随机为选中物体的视口颜色着色" data-idname="better_experie.object_color_random" data-keys="无修饰键"><div class="op">随机物体颜色<span class="tag adv">进阶</span></div><div class="desc">随机物体颜色</div></div>
+        <div class="card" data-tags="adv" data-loc="物体属性 → 物体染色工具面板" data-label="设集合色" data-detail="将物体颜色设为所在集合的颜色，按集合分组显示" data-idname="better_experie.object_color_collection" data-keys="无修饰键"><div class="op">设集合色<span class="tag adv">进阶</span></div><div class="desc">物体颜色 = 所在集合颜色</div></div>
+        <div class="card" data-tags="adv" data-loc="物体属性 → 物体染色工具面板" data-label="设父级色" data-detail="为顶层父级随机高饱和颜色，子级逐级降低饱和度，用颜色直观展示层级关系" data-idname="better_experie.object_color_parent" data-keys="无修饰键"><div class="op">设父级色<span class="tag adv">进阶</span></div><div class="desc">父级色：层级递减弱饱和度</div></div>
+        <div class="card" data-tags="adv" data-loc="物体属性 → 物体染色工具面板" data-label="顶点数量染色" data-detail="根据顶点数量或密度为物体着色（支持网格与曲线），用颜色直观展示模型精度分布" data-idname="better_experie.object_color_vertex_count" data-keys="无修饰键"><div class="op">顶点数量染色<span class="tag adv">进阶</span></div><div class="desc">按顶点数量/密度染色</div></div>
+        <div class="card" data-tags="adv" data-loc="物体属性 → 物体染色工具面板" data-label="清理物体颜色" data-detail="还原物体视口颜色为默认色" data-idname="better_experie.object_color_clear" data-keys="无修饰键"><div class="op">清理物体颜色<span class="tag adv">进阶</span></div><div class="desc">清理物体颜色</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">大纲视图</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="空对象层级 → 集合层级" data-detail="将选中的空物体层级结构完整转换为集合层级结构，保留父子关系。常用于将外部导入的模型层级转为 Blender 集合层级" data-idname="better_experie.empties_to_collections" data-keys="无修饰键"><div class="op">空对象层级 → 集合层级<span class="tag adv">进阶</span></div><div class="desc">空对象层级 → 集合层级</div></div>
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="集合层级 → 空对象层级" data-detail="将集合层级结构完整转换为空物体层级结构，保留父子关系。可用于将 Blender 层级导出外部模型前的准备" data-idname="better_experie.collections_to_empties" data-keys="无修饰键"><div class="op">集合层级 → 空对象层级<span class="tag adv">进阶</span></div><div class="desc">集合层级 → 空对象层级</div></div>
+        <div class="card" data-tags="hi" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="创建空物体组" data-detail="在选中物体的层级位置新建一个空物体，并把所选对象设为其子集，快速创建组织用的空物体组" data-idname="better_experie.create_empty_group" data-keys="无修饰键"><div class="op">创建空物体组<span class="tag hi">高频</span></div><div class="desc">为选中对象创建共同父级空物体</div></div>
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="解散空物体组" data-detail="将选中空物体的所有子集移出并保持世界空间变换不变，然后删除该空物体" data-idname="better_experie.dissolve_empty_group" data-keys="无修饰键"><div class="op">解散空物体组<span class="tag adv">进阶</span></div><div class="desc">解散空物体组</div></div>
+        <div class="card" data-tags="hi" data-loc="大纲视图 → 标题栏按钮" data-label="添加空物体（支持修饰键）" data-detail="新建空物体。无修饰键或 Ctrl：与选中对象同级；Shift：作为子集；Alt：作为父集" data-idname="better_experie.add_empty_sibling" data-keys="Ctrl/无修饰 同级 | Shift 作为子集 | Alt 作为父集"><div class="op">添加空物体（支持修饰键）<span class="tag hi">高频</span></div><div class="desc">添加空物体</div></div>
+        <div class="card" data-tags="hi" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="清除无用空物体" data-detail="遍历场景，当空物体不包含子集、且未被其他对象的修改器引用时，将其删除" data-idname="better_experie.clear_useless_empties" data-keys="无修饰键"><div class="op">清除无用空物体<span class="tag hi">高频</span></div><div class="desc">清除无用空物体</div></div>
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="清除为空集合" data-detail="遍历场景中所有集合，删除那些不包含任何对象的空集合" data-idname="better_experie.clear_empty_collections" data-keys="无修饰键"><div class="op">清除为空集合<span class="tag adv">进阶</span></div><div class="desc">删除所有为空的集合</div></div>
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="打包为集合实例" data-detail="将选中的对象或活动集合打包为一个集合实例（Collection Instance），减少场景对象数量" data-idname="better_experie.collection_to_instance" data-keys="无修饰键"><div class="op">打包为集合实例<span class="tag adv">进阶</span></div><div class="desc">打包选中对象为集合实例</div></div>
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="实例解包还原为集合" data-detail="将选中的集合实例解包还原为原始的集合层级结构" data-idname="better_experie.instance_to_collection" data-keys="无修饰键"><div class="op">实例解包还原为集合<span class="tag adv">进阶</span></div><div class="desc">实例解包还原为集合</div></div>
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 右键菜单 → 更好的体验" data-label="修改集合实例原点" data-detail="批量修改选中集合实例的原点位置（支持精确包围盒设置），保持视觉位置不变" data-idname="better_experie.adjust_instance_pivot" data-keys="无修饰键"><div class="op">修改集合实例原点<span class="tag adv">进阶</span></div><div class="desc">修改集合实例原点</div></div>
+        <div class="card" data-tags="adv" data-loc="大纲视图 → 标题栏按钮" data-label="锁定/解锁变换" data-detail="默认锁定所选对象的位移、旋转、缩放；按住 Alt 点击则解锁" data-idname="better_experie.toggle_transform_locks" data-keys="Alt 解锁 | 无修饰 锁定"><div class="op">锁定/解锁变换<span class="tag adv">进阶</span></div><div class="desc">锁定/解锁选中对象变换</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">VSE / 文本编辑器</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="hi" data-loc="VSE → 右键菜单 → 更好的体验" data-label="向左/向右对齐片段" data-detail="将所有选中片段的开头对齐到最早片段的开头（左对齐）或结尾对齐到最晚片段的结尾（右对齐），同一源组内保持相对位置不变" data-idname="better_experie.align_strips_left / better_experie.align_strips_right" data-keys="无修饰键"><div class="op">向左/向右对齐片段<span class="tag hi">高频</span></div><div class="desc">向左/右对齐片段</div></div>
+        <div class="card" data-tags="adv" data-loc="VSE → 右键菜单 → 更好的体验" data-label="正向/反向堆叠片段" data-detail="将选中片段按同源分组后首尾相连正向堆叠，或尾对头反向堆叠。同组内保持相对位置不变" data-idname="better_experie.stack_strips_forward / better_experie.stack_strips_reverse" data-keys="无修饰键"><div class="op">正向/反向堆叠片段<span class="tag adv">进阶</span></div><div class="desc">正向/反向堆叠片段</div></div>
+        <div class="card" data-tags="adv" data-loc="VSE → 右键菜单 → 更好的体验" data-label="偏移堆叠片段" data-detail="将选中的 VSE 片段按同源分组后按自定义重叠/间隔帧数堆叠排列，弹出对话框设置偏移量" data-idname="better_experie.stack_strips" data-keys="无修饰键"><div class="op">偏移堆叠片段<span class="tag adv">进阶</span></div><div class="desc">偏移堆叠（自定义偏移量）</div></div>
+        <div class="card" data-tags="adv" data-loc="VSE → 右键菜单 → 更好的体验" data-label="循环轮换片段位置" data-detail="将选中的片段按同源分组后，每个组的位置和轨道循环轮换到下一组的位置" data-idname="better_experie.rotate_strip_positions" data-keys="无修饰键"><div class="op">循环轮换片段位置<span class="tag adv">进阶</span></div><div class="desc">循环轮换片段位置</div></div>
+        <div class="card" data-tags="hi" data-loc="VSE → 右键菜单 → 更好的体验" data-label="压实轨道" data-detail="将所有片段向下移动到连续的轨道，移除轨道之间的空隙，使 VSE 布局更紧凑" data-idname="better_experie.compact_channels" data-keys="无修饰键"><div class="op">压实轨道<span class="tag hi">高频</span></div><div class="desc">压实轨道</div></div>
+        <div class="card" data-tags="hi" data-loc="文本编辑器 → 编辑菜单 / 右键菜单" data-label="移除尾部空白" data-detail="移除文本编辑器中所有行末尾的空白字符（空格、Tab等）" data-idname="better_experie.text_remove_trailing_space" data-keys="无修饰键"><div class="op">移除尾部空白<span class="tag hi">高频</span></div><div class="desc">移除尾部空白</div></div>
+        <div class="card" data-tags="hi" data-loc="文本编辑器 → 编辑菜单 / 右键菜单" data-label="移除空白行" data-detail="移除文本编辑器中所有不包含任何字符的空白行" data-idname="better_experie.text_remove_empty_lines" data-keys="无修饰键"><div class="op">移除空白行<span class="tag hi">高频</span></div><div class="desc">移除空白行</div></div>
+        <div class="card" data-tags="adv" data-loc="文本编辑器 → 编辑菜单 / 右键菜单" data-label="选区行排序" data-detail="将文本编辑器选中区域内的行按字母顺序排序" data-idname="better_experie.text_sort_selected_lines" data-keys="无修饰键"><div class="op">选区行排序<span class="tag adv">进阶</span></div><div class="desc">选区行排序</div></div>
+        <div class="card" data-tags="adv" data-loc="文本编辑器 → 编辑菜单 / 右键菜单" data-label="大小写转换" data-detail="将选中文本转换为大写、小写、首字母大写或大小写反转" data-idname="better_experie.text_capitalization_editor" data-keys="无修饰键"><div class="op">大小写转换<span class="tag adv">进阶</span></div><div class="desc">大小写转换</div></div>
+        <div class="card" data-tags="adv" data-loc="文本编辑器 → 编辑菜单 / 右键菜单" data-label="插入日期时间" data-detail="在文本编辑器光标处插入当前日期和时间，支持 6 种预设格式" data-idname="better_experie.text_insert_datetime" data-keys="无修饰键"><div class="op">插入日期时间<span class="tag adv">进阶</span></div><div class="desc">插入日期时间（6种格式）</div></div>
+        <div class="card" data-tags="adv" data-loc="文本编辑器 → 编辑菜单 / 右键菜单" data-label="字数统计" data-detail="统计文本编辑器内容的总字符数、非空白字符数和总行数" data-idname="better_experie.text_word_count" data-keys="无修饰键"><div class="op">字数统计<span class="tag adv">进阶</span></div><div class="desc">字数统计</div></div>
+        <div class="card" data-tags="adv" data-loc="文本编辑器 → 编辑菜单 / 右键菜单" data-label="多语言输入" data-detail="打开一个输入框，支持多语言输入，并将文本插入到文本编辑器中" data-idname="better_experie.text_multi_language_input" data-keys="无修饰键"><div class="op">多语言输入<span class="tag adv">进阶</span></div><div class="desc">多语言输入</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">系统工具</h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="hi" data-loc="文件菜单 → Clean Up" data-label="系统优化" data-detail="一键释放物理缓存、清理未使用的数据块、清空撤销堆栈、清除动画代理缓存、强制运行 Python 垃圾回收（GC）" data-idname="better_experie.system_optimization" data-keys="无修饰键"><div class="op">系统优化<span class="tag sys">系统</span></div><div class="desc">释放物理缓存/清理孤数据/重置撤销/GC</div></div>
+        <div class="card" data-tags="adv" data-loc="顶部栏 → Render 菜单" data-label="后台渲染" data-detail="通过子进程调用无图形界面的 Blender 进行后台渲染（支持静帧和动画），自动生成批处理脚本。请确保当前文件已保存" data-idname="better_experie.background_render_execute" data-keys="无修饰键"><div class="op">后台渲染<span class="tag hi">高频</span></div><div class="desc">子进程后台渲染（静帧/动画）</div></div>
+        <div class="card" data-tags="adv" data-loc="顶部栏 → Render 菜单" data-label="强制终止后台渲染" data-detail="强制结束所有正在运行的 Blender 后台渲染子进程" data-idname="better_experie.background_render_kill" data-keys="无修饰键"><div class="op">强制终止后台渲染<span class="tag sys">系统</span></div><div class="desc">强制终止后台渲染进程</div></div>
+        <div class="card" data-tags="adv" data-loc="渲染属性 → Passes → AOV 面板（Cycles）" data-label="AOV 自动扫描" data-detail="扫描场景中所有材质的 AOV Output 节点，将缺失的 AOV 变量自动添加到视图层的 AOV 列表中，无需手动配置" data-idname="better_experie.rescan_aov" data-keys="无修饰键"><div class="op">AOV 自动扫描<span class="tag sys">系统</span></div><div class="desc">AOV 自动扫描添加到视图层</div></div>
+        <div class="card" data-tags="adv" data-loc="视图层属性 → 集合可见性覆盖面板" data-label="集合可见性覆盖" data-detail="在视图层属性中管理集合可见性覆盖条目，通过驱动器绑定实现跨场景的集合可见性同步（如 A 场景控制 B 场景的集合显隐）" data-idname="better_experie.add_collection_override" data-keys="无修饰键"><div class="op">集合可见性覆盖<span class="tag sys">系统</span></div><div class="desc">添加集合可见性覆盖</div></div>
+        <div class="card" data-tags="adv" data-loc="视图层属性 → 集合可见性覆盖面板" data-label="刷新集合覆盖绑定" data-detail="手动刷新所有驱动器绑定。若集合内新增了对象请点击此按钮重新建立驱动" data-idname="better_experie.refresh_collection_override" data-keys="无修饰键"><div class="op">刷新集合覆盖绑定<span class="tag sys">系统</span></div><div class="desc">刷新覆盖绑定（集合新增对象后点击）</div></div>
+        <div class="card" data-tags="adv" data-loc="视图层属性 → 集合可见性覆盖面板" data-label="删除集合覆盖" data-detail="删除此集合可见性覆盖条目" data-idname="better_experie.remove_collection_override" data-keys="无修饰键"><div class="op">删除集合覆盖<span class="tag sys">系统</span></div><div class="desc">删除集合可见性覆盖条目</div></div>
+        <div class="card" data-tags="adv" data-loc="（程序调用）" data-label="显示说明书" data-detail="在弹出的新文本编辑器窗口中打开指定的说明书文本文件" data-idname="better_experie.show_manual" data-keys="无修饰键"><div class="op">显示说明书<span class="tag sys">系统</span></div><div class="desc">文本编辑器打开文档</div></div>
+        <div class="card" data-tags="hi" data-loc="工作区属性 → 插件面板" data-label="切换插件过滤" data-detail="切换工作区插件过滤功能的开关状态。开启时自动将 Better_Experie 自身加入白名单确保不被隐藏。按钮文字动态变化（"启用过滤"/"关闭过滤"）" data-idname="better_experie.toggle_addon_filter" data-keys="无修饰键"><div class="op">切换插件过滤<span class="tag sys">系统</span></div><div class="desc">切换插件过滤（按钮动态变化）</div></div>
+        <div class="card" data-tags="hi" data-loc="工作区属性 → 插件面板" data-label="反转过滤" data-detail="翻转工作区插件过滤的勾选状态：之前勾选的变为未勾选，未勾选的变为勾选。自动保留 Better_Experie 自身" data-idname="better_experie.flip_addon_filter" data-keys="无修饰键"><div class="op">反转插件过滤<span class="tag sys">系统</span></div><div class="desc">反转过滤勾选状态</div></div>
+        <div class="card" data-tags="adv" data-loc="工作区属性 → 插件面板" data-label="保存当前状态为场景预设" data-detail="将当前工作区插件的开关状态保存为预设，存储在场景属性中。可在预设列表中直接重命名" data-idname="better_experie.save_addon_filter_preset" data-keys="无修饰键"><div class="op">保存当前状态为场景预设<span class="tag sys">系统</span></div><div class="desc">保存当前状态为场景预设</div></div>
+        <div class="card" data-tags="adv" data-loc="工作区属性 → 插件面板" data-label="应用预设" data-detail="恢复之前保存的插件开关状态预设，一键切换插件组合" data-idname="better_experie.apply_addon_filter_preset" data-keys="无修饰键"><div class="op">应用插件过滤预设<span class="tag sys">系统</span></div><div class="desc">应用插件过滤预设</div></div>
+        <div class="card" data-tags="adv" data-loc="工作区属性 → 插件面板" data-label="删除插件过滤预设" data-detail="删除选中的插件过滤预设" data-idname="better_experie.delete_addon_filter_preset" data-keys="无修饰键"><div class="op">删除预设<span class="tag sys">系统</span></div><div class="desc">删除插件过滤预设</div></div>
+        <div class="card" data-tags="adv" data-loc="属性 → 输出 → 单帧自动保存面板" data-label="渲染自动保存" data-detail="渲染完成后自动将 Render Result 保存到指定路径，无需手动保存。本质是 render_post handler" data-idname="" data-keys="无修饰键"><div class="op">渲染自动保存<span class="tag hi">高频</span></div><div class="desc">渲染完成后自动保存 Render Result</div></div>
+        <div class="card" data-tags="adv" data-loc="渲染属性 → Film 面板" data-label="延迟透明" data-detail="仅在渲染时临时启用 Film → Transparent，渲染完成后自动恢复原设置。支持 Eevee/Cycles/Workbench" data-idname="" data-keys="无修饰键"><div class="op">延迟透明<span class="tag hi">高频</span></div><div class="desc">渲染时自动启用 Film→Transparent</div></div>
+      </div>
+
+      <h3 style="font-family:Outfit,sans-serif;font-weight:600;font-size:1em;color:var(--accent);margin:20px 0 10px">开发者工具 <span style="font-weight:400;color:var(--text2);font-size:.88em">（需 偏好设置》界面》启用 开发选项）</span></h3>
+      <div class="cards op-list">
+        <div class="card" data-tags="dbg" data-loc="偏好设置 → 开发者工具面板" data-label="面板提取器" data-detail="激活面板提取器模式：在 Blender 所有面板/菜单/标题栏上注入"提取"按钮，点击即打印该 Panel/Menu/Header 的类名、文件路径、行号、源代码" data-idname="better_experie.developer_panel_picker" data-keys="无修饰键"><div class="op">面板提取器<span class="tag dbg">调试</span></div><div class="desc">面板提取器（悬停打印类名/路径/源码）</div></div>
+        <div class="card" data-tags="dbg" data-loc="（面板提取器激活后动态注入）" data-label="临时吸管" data-detail="点击面板上的"提取面板"按钮后，打印该面板所在的具体位置信息到控制台" data-idname="better_experie.developer_pick_panel_location" data-keys="无修饰键"><div class="op">临时吸管<span class="tag dbg">调试</span></div><div class="desc">临时吸管：打印面板位置</div></div>
+        <div class="card" data-tags="dbg" data-loc="右键菜单（按钮/菜单上）" data-label="打印元素信息" data-detail="从右键菜单中打印当前按钮/菜单/工具的完整属性信息到控制台（含 bl_idname、属性列表、继承链、源代码等）" data-idname="better_experie.developer_print_element_info" data-keys="无修饰键"><div class="op">打印元素信息<span class="tag dbg">调试</span></div><div class="desc">打印按钮/菜单/工具完整属性</div></div>
+        <div class="card" data-tags="dbg" data-loc="节点编辑器 → 右键菜单 → 更好的体验" data-label="读取节点信息" data-detail="读取选中节点的完整属性信息并打印到控制台（含 socket、property、parent 等）" data-idname="better_experie.developer_read_node_info" data-keys="无修饰键"><div class="op">读取节点信息<span class="tag dbg">调试</span></div><div class="desc">读取完整节点属性信息</div></div>
+        <div class="card" data-tags="dbg" data-loc="偏好设置 → 开发者工具面板" data-label="一键打包" data-detail="一键验证插件结构完整性，通过 Blender CLI 生成可分发的 .zip 扩展包" data-idname="better_experie.pack_addon" data-keys="无修饰键"><div class="op">一键打包<span class="tag dbg">调试</span></div><div class="desc">一键验证+生成 .zip 扩展包</div></div>
+        <div class="card" data-tags="dbg" data-loc="偏好设置 → 开发者工具面板" data-label="生成/编辑 manifest" data-detail="一键生成或编辑插件的 blender_manifest.toml 配置文件，包含完整的 GUI 填写界面和自动填充功能" data-idname="better_experie.generate_addon_manifest" data-keys="无修饰键"><div class="op">生成/编辑 manifest<span class="tag dbg">调试</span></div><div class="desc">生成/编辑 blender_manifest.toml (GUI)</div></div>
+        <div class="card" data-tags="dbg" data-loc="偏好设置面板" data-label="热重载" data-detail="重新加载所有子模块，用于插件开发期间的热更新。注意：热重载可能导致菜单注入暂时消失，需完全禁用再启用插件才能恢复" data-idname="better_experie.reload_addon" data-keys="无修饰键"><div class="op">热重载<span class="tag dbg">调试</span></div><div class="desc">热重载所有子模块</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== FAQ ========== -->
+<div class="slide" id="s-faq">
+  <div class="slide-inner">
+    <div class="slide-head"><h2>常见问题</h2></div>
+    <div class="slide-body">
+      <div class="faq-item"><div class="faq-q">Q: 如何导入自己的渐变库？</div><div class="faq-a">A: 节点编辑器右键 → 更好的体验 → 颜色渐变库 → 「导入渐变库」。选择任意 <code>.blend</code> 文件，插件会自动提取其中存储的渐变预设。同理「导出渐变库」可将当前所有预设保存为 <code>.blend</code> 以便分享或备份。</div></div>
+      <div class="faq-item"><div class="faq-q">Q: 拓扑 HUD 开启了但看不到任何高亮？</div><div class="faq-a">A: 检查三个条件：① 处于编辑模式且选中了网格对象；② 在 HUD 设置中至少启用了<strong>一种检测类型</strong>（默认全部关闭）；③ 阈值设置合理（如检测 N-gon 需要面边数 > 4）。</div></div>
+      <div class="faq-item"><div class="faq-q">Q: 节点小地图不显示？</div><div class="faq-a">A: 需要在偏好设置中开启 <code>show_node_minimap</code>，然后在节点编辑器中左键点击小地图区域即可跳转。</div></div>
+      <div class="faq-item"><div class="faq-q">Q: 插件过滤功能会把自己的功能也隐藏吗？</div><div class="faq-a">A: 不会。启用过滤时插件会自动把 <code>Better_Experie</code> 自身加入白名单，"反转过滤"操作也会保留自身。</div></div>
+      <div class="faq-item"><div class="faq-q">Q: 开发打包工具的 manifest 怎么填？</div><div class="faq-a">A: 偏好设置中指定 <code>output_path</code> 为你的插件目录，点击"生成 manifest"会自动从 <code>__init__.py</code> 的 <code>bl_info</code> 读取名称、版本、作者等信息。手动调整后点击"一键打包"即可生成 <code>.zip</code> 扩展包。</div></div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <p>Better_Experie v0.0.1 — 来一点咖啡吗 &copy; 2026</p>
+  <p><a href="https://space.bilibili.com/27284213">Bilibili</a> &middot; GPL-3.0-or-later</p>
+  <p style="margin-top:12px;color:var(--text2);font-size:.78em;">V13 &middot; 设计风格：纵向叙事（含悬浮详细提示）</p>
+</footer>
+
+<script>
+(function(){
+  const tt=document.getElementById('tooltip');
+  document.querySelectorAll('.card[data-loc]').forEach(card=>{
+    card.addEventListener('mouseenter',function(e){
+      const loc=this.dataset.loc||'',label=this.dataset.label||'',detail=this.dataset.detail||'',keys=this.dataset.keys||'',idname=this.dataset.idname||'';
+      let html='<div class="tt-loc">📍 '+loc+'</div>';
+      html+='<div class="tt-label">'+label+'</div>';
+      if(idname)html+='<div class="tt-idname">'+idname+'</div>';
+      if(detail)html+='<div class="tt-desc">'+detail+'</div>';
+      if(keys&&keys!=='无修饰键')html+='<div class="tt-keys">⌨ '+keys.split(' | ').map(k=>'<kbd>'+k+'</kbd>').join(' ')+'</div>';
+      tt.innerHTML=html;tt.classList.add('show');
+    });
+    card.addEventListener('mousemove',function(e){
+      let x=e.clientX+18,y=e.clientY+14;
+      if(x+400>window.innerWidth)x=e.clientX-400;
+      if(y+200>window.innerHeight)y=e.clientY-200;
+      tt.style.left=x+'px';tt.style.top=y+'px';
+    });
+    card.addEventListener('mouseleave',function(){tt.classList.remove('show')});
+  });
+
+  const progressBar=document.getElementById('progress-bar');
+  window.addEventListener('scroll',()=>{
+    const st=window.scrollY||document.documentElement.scrollTop;
+    const dh=document.documentElement.scrollHeight-window.innerHeight;
+    progressBar.style.width=dh>0?Math.min(st/dh*100,100)+'%':'0%';
+  },{passive:true});
+
+  const dots=document.getElementById('dot-nav');
+  document.querySelectorAll('.slide[id]').forEach(s=>{
+    const a=document.createElement('a');a.href='#'+s.id;a.title=s.querySelector('h2')?.textContent||'';
+    a.addEventListener('click',e=>{e.preventDefault();s.scrollIntoView({behavior:'smooth'})});dots.appendChild(a);
+  });
+  function updateDots(){
+    const all=document.querySelectorAll('.slide[id]');let idx=0;
+    all.forEach((s,i)=>{if(s.getBoundingClientRect().top<=window.innerHeight*.4)idx=i});
+    document.querySelectorAll('#dot-nav a').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  }
+  window.addEventListener('scroll',updateDots,{passive:true});updateDots();
+
+  function filterOps(){
+    const q=(document.getElementById('local-search')?.value||'').toLowerCase();
+    const activeTags=new Set();document.querySelectorAll('.tag-filter:checked').forEach(cb=>activeTags.add(cb.dataset.tag));
+    let total=0,shown=0;
+    document.querySelectorAll('.op-list .card').forEach(c=>{
+      total++;const tags=(c.dataset.tags||'').split(' ');
+      const text=(c.textContent||'').toLowerCase();
+      const matchTag=tags.some(t=>activeTags.has(t)),matchQ=!q||text.includes(q);
+      const show=matchTag&&matchQ;c.classList.toggle('hidden',!show);if(show)shown++;
+    });
+    const cnt=document.getElementById('search-count');if(cnt)cnt.textContent=shown===total&&!q?'':shown+'/'+total;
+    const nr=document.getElementById('no-results');if(nr)nr.style.display=shown===0?'inline':'none';
+  }
+  document.getElementById('local-search')?.addEventListener('input',filterOps);
+  document.querySelectorAll('.tag-filter').forEach(cb=>cb.addEventListener('change',filterOps));filterOps();
+
+  document.getElementById('global-search')?.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){const q=this.value.trim().toLowerCase();if(!q)return;const local=document.getElementById('local-search');document.getElementById('s-all')?.scrollIntoView({behavior:'smooth'});setTimeout(()=>{if(local){local.value=q;filterOps()}},400)}
+  });
+})();
+</script>
 </body>
 </html>
