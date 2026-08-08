@@ -23,10 +23,8 @@
 ## 📦 安装
 
 1. 下载本仓库为 `.zip`（`Code` → `Download ZIP`）
-2.
-  a. Blender → 编辑 → 偏好设置 → 插件 → 安装
-  b. 直接拖入ZIP到blender，自动安装
-4. 勾选启用 `AA_Better_Experie`
+2.【编辑→偏好设置→插件→安装】/【直接拖入ZIP到blender，自动安装】
+3. 勾选启用 `AA_Better_Experie`
 
 ## 🔧 环境要求
 
