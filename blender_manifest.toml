@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+blender_version_min = "4.5.0"
+version = "1.0.0"
+id = "better_experie"
+name = "Better_Experie[更好的体验]"
+tagline = "Improve user experience"
+license = ["SPDX:GPL-3.0-or-later"]
+maintainer = "来一点咖啡吗"
+type = "add-on"
+website = "https://space.bilibili.com/27284213"
+copyright = ["2026 来一点咖啡吗"]
+tags = ["3D View", "Camera", "Compositing", "Mesh", "Object", "Scene", "Sequencer", "System", "Text Editor", "User Interface"]
+
+[build]
+paths_exclude_pattern = ["__pycache__/", ".git", "*.zip", "note/", "scripts/", "CONVENTIONS.md"]

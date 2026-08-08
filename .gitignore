@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# Blender 备份文件（保留 data/ 下的资源库）
+*.blend1
+*.blend2
+
+# 打包产物
+*.zip
+addonpack/
+archive/
+
+# 开发笔记（不入库）
+note/
+
+# 环境/系统
+.env
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# 临时
+*.tmp
+~$*
