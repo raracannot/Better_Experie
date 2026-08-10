@@ -33,6 +33,13 @@ def _get_actual_output_path(context, setting):
     output_path = context.scene.render.filepath if setting.use_scene_filepath else setting.filepath
     return bpy.path.abspath(output_path)
 
+# 保守渲染条件
+CONSERVATIVE_SCRIPT = """import bpy
+bpy.context.preferences.system.use_online_access = False
+bpy.context.scene.cycles.denoising_use_gpu = False
+bpy.context.scene.render.compositor_device = 'CPU'
+bpy.context.scene.render.compositor_denoise_device = 'CPU'
+"""
 
 def _generate_render_command(context, setting):
     blender_path = bpy.app.binary_path
@@ -46,7 +53,9 @@ def _generate_render_command(context, setting):
         filepath,
         "-o", output_path,
     ]
-
+    if hasattr(setting, "use_conservative_mode") and setting.use_conservative_mode:
+        clean_script = "; ".join([line.strip() for line in CONSERVATIVE_SCRIPT.splitlines() if line.strip()])
+        cmd.extend(["--python-expr", clean_script])
     if setting.operator_type == 'STILL':
         if setting.use_scene_frame:
             frame = _get_current_frame(context)
@@ -188,7 +197,11 @@ class BetterExperie_OT_BackgroundRenderExecute(bpy.types.Operator):
         name="生成批处理文件", description="执行后创建渲染批处理文件", default=False)
     open_dir: bpy.props.BoolProperty(
         name="打开输出目录", description="渲染完成后打开输出目录", default=False)
-
+    
+    use_conservative_mode: bpy.props.BoolProperty(
+        name="保守渲染 (推荐)", description="渲染时，断开网络验证并取消GPU降噪，以提升稳定性", 
+        default=False)
+    
     @classmethod
     def poll(cls, context):
         return bpy.data.is_saved
@@ -222,6 +235,7 @@ class BetterExperie_OT_BackgroundRenderExecute(bpy.types.Operator):
         col.separator()
         col.prop(self, "generate_batch_file")
         col.prop(self, "open_dir")
+        col.prop(self, "use_conservative_mode")
 
     def execute(self, context):
         return _execute_background_render(context, self)

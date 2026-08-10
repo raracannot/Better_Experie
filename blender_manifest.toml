@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 blender_version_min = "4.5.0"
-version = "1.0.0"
+version = "1.0.1"
 id = "better_experie"
 name = "Better_Experie[更好的体验]"
 tagline = "Improve user experience"

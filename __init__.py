@@ -2,8 +2,9 @@
 bl_info = {
     "name": "Better_Experie【更好的体验】",
     "author": "来一点咖啡吗",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (4, 5, 0),
+    'doc_url': 'https://space.bilibili.com/27284213',
 }
 
 import bpy
