@@ -43,50 +43,54 @@ def _get_opposite_edge_geometric(face, edge, parallel_factor=0.5):
     return best_edge if max_alignment >= parallel_factor else None
 
 
-def _expand_ring_from_edge(bm, start_edge, max_steps, parallel_factor=0.5,
+def _expand_ring_from_edge(bm, start_edge, steps, parallel_factor=0.5,
                            max_angle=math.radians(90), stop_at_sharp=False,
                            trace_dir='BOTH'):
     result = {start_edge}
-    edge_stack = []
+    limit = abs(steps)
+    # 单边模式下负数为反向延伸
+    if steps >= 0 or trace_dir == 'BOTH':
+        eff_dir = trace_dir
+    else:
+        eff_dir = 'DIR_B' if trace_dir == 'DIR_A' else 'DIR_A'
 
-    start_faces = list(start_edge.link_faces)
-    seed_faces = []
-    if trace_dir in {'BOTH', 'DIR_A'} and len(start_faces) > 0:
-        seed_faces.append((start_faces[0], start_edge))
-    if trace_dir in {'BOTH', 'DIR_B'} and len(start_faces) > 1:
-        seed_faces.append((start_faces[1], start_edge))
-
-    for face, from_edge in seed_faces:
+    def _next_opp(face, from_edge):
+        """返回满足所有限制的对边，否则返回 None"""
         opp = _get_opposite_edge_geometric(face, from_edge, parallel_factor)
         if not opp or opp in result:
-            continue
+            return None
         if stop_at_sharp and not opp.smooth:
-            continue
+            return None
         if max_angle < math.radians(90):
             cur_dir = (from_edge.verts[1].co - from_edge.verts[0].co).normalized()
             nxt_dir = (opp.verts[1].co - opp.verts[0].co).normalized()
             if abs(cur_dir.dot(nxt_dir)) < math.cos(max_angle):
-                continue
-        result.add(opp)
-        edge_stack.append(opp)
+                return None
+        return opp
 
-    steps_taken = 0
-    while edge_stack and steps_taken < max_steps:
-        curr_edge = edge_stack.pop()
-        cur_dir = (curr_edge.verts[1].co - curr_edge.verts[0].co).normalized()
-        for face in curr_edge.link_faces:
-            opp = _get_opposite_edge_geometric(face, curr_edge, parallel_factor)
-            if not opp or opp in result:
-                continue
-            if stop_at_sharp and not opp.smooth:
-                continue
-            if max_angle < math.radians(90):
-                nxt_dir = (opp.verts[1].co - opp.verts[0].co).normalized()
-                if abs(cur_dir.dot(nxt_dir)) < math.cos(max_angle):
-                    continue
+    def _expand_chain(start_face, from_edge):
+        """单方向独立扩选：本侧的边栈与本侧步数计数，互不影响另一侧"""
+        edge_stack = []
+        opp = _next_opp(start_face, from_edge)
+        if opp:
             result.add(opp)
             edge_stack.append(opp)
-        steps_taken += 1
+
+        steps_taken = 0
+        while edge_stack and (limit <= 0 or steps_taken < limit):
+            curr_edge = edge_stack.pop()
+            for face in curr_edge.link_faces:
+                nxt = _next_opp(face, curr_edge)
+                if nxt:
+                    result.add(nxt)
+                    edge_stack.append(nxt)
+            steps_taken += 1
+
+    start_faces = list(start_edge.link_faces)
+    if eff_dir in {'BOTH', 'DIR_A'} and len(start_faces) > 0:
+        _expand_chain(start_faces[0], start_edge)
+    if eff_dir in {'BOTH', 'DIR_B'} and len(start_faces) > 1:
+        _expand_chain(start_faces[1], start_edge)
     return result
 
 
@@ -104,8 +108,8 @@ class BetterExperie_EdgeRingSettings(bpy.types.PropertyGroup):
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
     steps: bpy.props.IntProperty(
-        name="扩选次数", description="沿 Ring 方向扩选的最大步数",
-        default=100, min=1, max=1000)
+        name="扩选次数", description="向两端扩选的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     max_angle: bpy.props.FloatProperty(
         name="最大转向角", description="相邻环边的方向偏差超过此值则停止",
         default=math.radians(90), min=0.0, max=math.radians(180), unit='ROTATION')
@@ -122,7 +126,7 @@ def _get_ring_settings(context):
 class BetterExperie_OT_SelectEdgeRingGeo(bpy.types.Operator):
     bl_idname = "better_experie.select_edge_ring_geo"
     bl_label = "选择并排边环（批处理）"
-    bl_description = "从当前选中的边出发，沿并排（Ring）方向几何算法扩选至非流形区域"
+    bl_description = "从当前选中的边出发，沿并排（Ring）方向几何算法扩选至非流形区域（0步为不设限，单边负数反向）"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -141,7 +145,8 @@ class BetterExperie_OT_SelectEdgeRingGeo(bpy.types.Operator):
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
     steps: bpy.props.IntProperty(
-        name="扩选次数", default=100, min=1, max=1000)
+        name="扩选次数", description="向两端扩选的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     max_angle: bpy.props.FloatProperty(
         name="最大转向角", description="相邻环边的方向偏差超过此值则停止",
         default=math.radians(90), min=0.0, max=math.radians(180), unit='ROTATION')
@@ -221,7 +226,7 @@ def _draw_hud(self, context):
 class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
     bl_idname = "better_experie.select_edge_ring_interactive"
     bl_label = "选择并排边环（交互）"
-    bl_description = "鼠标悬浮预览并排边环，左键选中（Shift加选 Ctrl减选），右键取消"
+    bl_description = "鼠标悬浮预览并排边环，左键选中（Shift加选 Ctrl减选），Shift滚轮调段数，Tab切换方向，右键取消"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -240,8 +245,8 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
     steps: bpy.props.IntProperty(
-        name="扩选次数", description="沿 Ring 方向扩选的最大步数",
-        default=100, min=1, max=1000)
+        name="扩选次数", description="向两端扩选的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     max_angle: bpy.props.FloatProperty(
         name="最大转向角", description="相邻环边的方向偏差超过此值则停止",
         default=math.radians(90), min=0.0, max=math.radians(180), unit='ROTATION')
@@ -287,12 +292,31 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
 
             add_modal_border(self, context)
             context.window.cursor_modal_set('CROSSHAIR')
-            context.workspace.status_text_set("悬浮预览 | 左键确定 | Shift加选 Ctrl减选 | 右键取消")
+            self._update_status_text(context)
             context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
         except Exception:
             self._cleanup(context)
             return {'CANCELLED'}
+
+    def _update_status_text(self, context):
+        s = _get_ring_settings(context)
+        base_dir = {'BOTH': '双向', 'DIR_A': '方向A', 'DIR_B': '方向B'}[s.trace_dir]
+        if s.trace_dir == 'DIR_A':
+            dir_name = '方向B' if s.steps < 0 else '方向A'
+        elif s.trace_dir == 'DIR_B':
+            dir_name = '方向A' if s.steps < 0 else '方向B'
+        else:
+            dir_name = base_dir
+        steps_text = '不限' if s.steps == 0 else str(s.steps)
+        text = (
+            f"悬浮预览并排边环 | 步数:{steps_text}(Shift滚轮) | "
+            f"方向:{dir_name}(Tab) | S设置 | 左键确定 | Shift加选 Ctrl减选 | 右键取消"
+        )
+        try:
+            context.workspace.status_text_set(text)
+        except Exception:
+            pass
 
     def modal(self, context, event):
         try:
@@ -304,6 +328,27 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
             elif event.type == 'S' and event.value == 'PRESS':
                 # S 调用独立设置面板，确认后返回当前模态继续
                 bpy.ops.better_experie.edge_ring_settings('INVOKE_DEFAULT')
+                self._update_status_text(context)
+                return {'RUNNING_MODAL'}
+
+            elif event.type == 'TAB' and event.value == 'PRESS':
+                # Tab 切换延伸方向
+                s = _get_ring_settings(context)
+                order = ['BOTH', 'DIR_A', 'DIR_B']
+                s.trace_dir = order[(order.index(s.trace_dir) + 1) % len(order)]
+                self._update_hover(context, event)
+                self._update_status_text(context)
+                return {'RUNNING_MODAL'}
+
+            elif event.type in {'WHEELUPMOUSE', 'WHEELDOWNMOUSE'} and event.shift:
+                # Shift 滚轮增加/减少扩选段数
+                s = _get_ring_settings(context)
+                if event.type == 'WHEELUPMOUSE':
+                    s.steps = min(s.steps + 1, 10000)
+                else:
+                    s.steps = max(s.steps - 1, -10000)
+                self._update_hover(context, event)
+                self._update_status_text(context)
                 return {'RUNNING_MODAL'}
 
             elif event.type == 'LEFTMOUSE' and event.value == 'PRESS':

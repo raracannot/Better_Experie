@@ -29,7 +29,7 @@ def draw_select_by_trait(self, context):
         layout.operator("better_experie.select_face_region", text="选择面区域（锐边分界）", icon='FACESEL')
     else:
         # 点/边模式：锐边连续链
-        layout.operator("better_experie.select_sharp_chain", text="选择锐边/边界连续链")
+        layout.operator("better_experie.select_sharp_chain", text="选择锐边/边界/UV缝合边链")
 
 
 # ── 网格选择 → 扩选/收缩 ──

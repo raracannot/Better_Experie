@@ -74,7 +74,8 @@ class BetterExperie_FaceRingSettings(bpy.types.PropertyGroup):
         items=[('BOTH', "双向", ""), ('DIR_A', "方向 A", ""), ('DIR_B', "方向 B", "")],
         default='BOTH')
     count: bpy.props.IntProperty(
-        name="扩选次数", default=100, min=1, max=1000)
+        name="扩选次数", description="向两端扩选的面数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     parallel_factor: bpy.props.FloatProperty(
         name="平行系数", description="对边匹配的严格程度，越大越严格", default=0.5, min=0.0, max=1.0)
     angle_limit: bpy.props.FloatProperty(
@@ -93,7 +94,7 @@ def _get_settings(context):
 class BetterExperie_OT_SelectFaceRingModal(bpy.types.Operator):
     bl_idname = "better_experie.select_face_ring_modal"
     bl_label = "选择非流形循环面"
-    bl_description = "点击网格后沿并排（Ring）方向选中整条面环，支持方向/次数/角度/锐边/三角面限制，Shift加选Ctrl减选"
+    bl_description = "点击网格后沿并排（Ring）方向选中整条面环，Shift滚轮调次数，Tab切方向，Shift加选Ctrl减选"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -221,6 +222,24 @@ class BetterExperie_OT_SelectFaceRingModal(bpy.types.Operator):
                 bpy.ops.better_experie.face_ring_settings('INVOKE_DEFAULT')
                 return {'RUNNING_MODAL'}
 
+            elif event.type == 'TAB' and event.value == 'PRESS':
+                # Tab 切换扩选方向
+                s = _get_settings(context)
+                order = ['BOTH', 'DIR_A', 'DIR_B']
+                s.direction = order[(order.index(s.direction) + 1) % len(order)]
+                self._update_status_text(context)
+                return {'RUNNING_MODAL'}
+
+            elif event.type in {'WHEELUPMOUSE', 'WHEELDOWNMOUSE'} and event.shift:
+                # Shift 滚轮增加/减少扩选面数
+                s = _get_settings(context)
+                if event.type == 'WHEELUPMOUSE':
+                    s.count = min(s.count + 1, 10000)
+                else:
+                    s.count = max(s.count - 1, -10000)
+                self._update_status_text(context)
+                return {'RUNNING_MODAL'}
+
             elif event.type in {'RIGHTMOUSE', 'ESC'}:
                 self._cleanup(context)
                 return {'CANCELLED'}
@@ -242,13 +261,19 @@ class BetterExperie_OT_SelectFaceRingModal(bpy.types.Operator):
     def _update_status_text(self, context):
         """刷新左下角状态栏，展示当前参数与快捷键"""
         s = _get_settings(context)
-        dir_name = {'BOTH': '双向', 'DIR_A': '方向A', 'DIR_B': '方向B'}.get(s.direction, s.direction)
+        if s.direction == 'DIR_A':
+            dir_name = '方向B' if s.count < 0 else '方向A'
+        elif s.direction == 'DIR_B':
+            dir_name = '方向A' if s.count < 0 else '方向B'
+        else:
+            dir_name = '双向'
+        count_text = '不限' if s.count == 0 else str(s.count)
         text = (
-            f"扩选:{dir_name} 次数:{s.count} "
+            f"扩选:{dir_name} 次数:{count_text} "
             f"平行:{s.parallel_factor:.2f} "
             f"锐停:{'开' if s.stop_at_sharp else '关'} "
             f"三角停:{'开' if s.stop_at_triangles else '关'} | "
-            "S设置参数 | 左键扩选 Shift加选 Ctrl减选 | 右键/ESC退出"
+            "S设置参数 | Shift滚轮次数 Tab方向 | 左键扩选 Shift加选 Ctrl减选 | 右键/ESC退出"
         )
         try:
             context.workspace.status_text_set(text)
@@ -293,7 +318,8 @@ class BetterExperie_OT_SelectFaceRingModal(bpy.types.Operator):
             curr_f = start_f
             curr_e = from_edge
             processed = {start_f}
-            for _ in range(steps):
+            step_count = 0
+            while steps <= 0 or step_count < steps:
                 curr_f.select = target_state
                 next_e = _get_opposite_edge_geometric(curr_f, curr_e, s.parallel_factor)
                 if not next_e:
@@ -312,15 +338,25 @@ class BetterExperie_OT_SelectFaceRingModal(bpy.types.Operator):
                     break
                 curr_f, curr_e = next_f, next_e
                 processed.add(curr_f)
+                step_count += 1
 
-        if s.direction in {'BOTH', 'DIR_A'}:
-            expand(hit_face, start_edge, s.count)
-        if s.direction in {'BOTH', 'DIR_B'}:
+        # 单边模式下负数为反向延伸：DIR_A 负值走邻居侧，DIR_B 负值走命中侧
+        do_hit = (s.direction == 'BOTH'
+                  or (s.direction == 'DIR_A' and s.count >= 0)
+                  or (s.direction == 'DIR_B' and s.count < 0))
+        do_neighbor = (s.direction == 'BOTH'
+                       or (s.direction == 'DIR_A' and s.count < 0)
+                       or (s.direction == 'DIR_B' and s.count >= 0))
+
+        limit = abs(s.count)
+        if do_hit:
+            expand(hit_face, start_edge, limit)
+        if do_neighbor:
             neighbor_faces = [f for f in start_edge.link_faces if f != hit_face and not f.hide]
             for nf in neighbor_faces:
                 if s.stop_at_triangles and len(nf.verts) == 3:
                     continue
-                expand(nf, start_edge, s.count)
+                expand(nf, start_edge, limit)
 
         bmesh.update_edit_mesh(obj.data)
         # 选择已生效、网格已刷新，重建 BVH 使后续射线检测引用最新网格
@@ -397,7 +433,8 @@ class BetterExperie_OT_SelectFaceRingBatch(bpy.types.Operator):
         items=[('BOTH', "双向", ""), ('DIR_A', "方向 A", ""), ('DIR_B', "方向 B", "")],
         default='BOTH')
     count: bpy.props.IntProperty(
-        name="扩选次数", default=100, min=1, max=1000)
+        name="扩选次数", description="向两端扩选的面数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     parallel_factor: bpy.props.FloatProperty(
         name="平行系数", description="对边匹配的严格程度，越大越严格", default=0.5, min=0.0, max=1.0)
     angle_limit: bpy.props.FloatProperty(
@@ -443,7 +480,8 @@ class BetterExperie_OT_SelectFaceRingBatch(bpy.types.Operator):
             curr_f = start_f
             curr_e = from_edge
             processed = {start_f}
-            for _ in range(steps):
+            step_count = 0
+            while steps <= 0 or step_count < steps:
                 curr_f.select = target_state
                 next_e = _get_opposite_edge_geometric(curr_f, curr_e, self.parallel_factor)
                 if not next_e:
@@ -462,21 +500,30 @@ class BetterExperie_OT_SelectFaceRingBatch(bpy.types.Operator):
                     break
                 curr_f, curr_e = next_f, next_e
                 processed.add(curr_f)
+                step_count += 1
 
+        limit = abs(self.count)
         for sf in seed_faces:
             # 取面的第一条非隐藏边作为起始边
             start_edge = next((e for e in sf.edges if not e.hide), None)
             if not start_edge:
                 continue
 
-            if self.direction in {'BOTH', 'DIR_A'}:
-                expand(sf, start_edge, self.count, True)
-            if self.direction in {'BOTH', 'DIR_B'}:
+            do_hit = (self.direction == 'BOTH'
+                      or (self.direction == 'DIR_A' and self.count >= 0)
+                      or (self.direction == 'DIR_B' and self.count < 0))
+            do_neighbor = (self.direction == 'BOTH'
+                           or (self.direction == 'DIR_A' and self.count < 0)
+                           or (self.direction == 'DIR_B' and self.count >= 0))
+
+            if do_hit:
+                expand(sf, start_edge, limit, True)
+            if do_neighbor:
                 neighbor_faces = [f for f in start_edge.link_faces if f != sf and not f.hide]
                 for nf in neighbor_faces:
                     if self.stop_at_triangles and len(nf.verts) == 3:
                         continue
-                    expand(nf, start_edge, self.count, True)
+                    expand(nf, start_edge, limit, True)
 
         bmesh.update_edit_mesh(obj.data)
         return {'FINISHED'}

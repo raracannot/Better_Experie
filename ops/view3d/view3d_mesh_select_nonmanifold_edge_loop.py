@@ -56,14 +56,22 @@ def _trace_path(start_edge, max_angle, jump_dist, stop_at_sharp, steps, directio
     visited_verts = {v for v in start_edge.verts}
     verts = list(start_edge.verts)
     v_a, v_b = verts[0], verts[1]
+    limit = abs(steps)
+
     tasks = []
-    if direction_mode in {'BOTH', 'DIR_A'}:
-        tasks.append(v_a)
-    if direction_mode in {'BOTH', 'DIR_B'}:
-        tasks.append(v_b)
+    if direction_mode == 'BOTH':
+        tasks = [v_a, v_b]
+    elif direction_mode == 'DIR_A':
+        # 正数沿 A 端延伸；负数自动反向到 B 端
+        tasks = [v_a if steps >= 0 else v_b]
+    elif direction_mode == 'DIR_B':
+        # 正数沿 B 端延伸；负数自动反向到 A 端
+        tasks = [v_b if steps >= 0 else v_a]
+
     for start_v in tasks:
         curr_e, curr_v = start_edge, start_v
-        for _ in range(steps):
+        step_count = 0
+        while limit <= 0 or step_count < limit:
             if stop_at_sharp and _is_vertex_sharp(curr_v):
                 break
             next_e, next_v = _find_next_step(curr_e, curr_v, max_angle, jump_dist, visited_verts)
@@ -72,6 +80,7 @@ def _trace_path(start_edge, max_angle, jump_dist, stop_at_sharp, steps, directio
             final_edges.add(next_e)
             visited_verts.add(next_v)
             curr_e, curr_v = next_e, next_v
+            step_count += 1
             if len(final_edges) > 10000:
                 break
     return final_edges
@@ -89,8 +98,8 @@ class BetterExperie_NonManifoldEdgeLoopSettings(bpy.types.PropertyGroup):
     jump_threshold: bpy.props.FloatProperty(
         name="跳跃阈值", default=0.1, min=0.0, max=1.0)
     steps: bpy.props.IntProperty(
-        name="延伸步数", description="从起始边向外延伸的边数 (0为仅选中当前边)",
-        default=1000, min=0, max=10000)
+        name="延伸步数", description="向两端延伸的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     trace_dir: bpy.props.EnumProperty(
         name="延伸方向",
         items=[
@@ -109,7 +118,7 @@ def _get_loop_settings(context):
 class BetterExperie_OT_SelectNonManifoldEdgeLoopBatch(bpy.types.Operator):
     bl_idname = "better_experie.select_nonmanifold_edge_loop_batch"
     bl_label = "选择非流形循环边（批处理）"
-    bl_description = "从当前选中的边出发，沿循环（Loop）方向追溯选择非流形链"
+    bl_description = "从当前选中的边出发，沿循环（Loop）方向追溯选择非流形链（0步为不设限，单边负数反向）"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -126,7 +135,8 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoopBatch(bpy.types.Operator):
     jump_threshold: bpy.props.FloatProperty(
         name="跳跃阈值", default=0.1, min=0.0, max=1.0)
     steps: bpy.props.IntProperty(
-        name="延伸步数", default=1000, min=0, max=10000)
+        name="延伸步数", description="向两端延伸的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     trace_dir: bpy.props.EnumProperty(
         name="延伸方向",
         items=[
@@ -209,7 +219,7 @@ def _draw_callback(self, context):
 class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
     bl_idname = "better_experie.select_nonmanifold_edge_loop"
     bl_label = "选择非流形循环边（交互）"
-    bl_description = "鼠标悬浮预览非流形循环边链，左键选中（Shift加选 Ctrl减选），右键取消"
+    bl_description = "鼠标悬浮预览非流形循环边链，左键选中（Shift加选 Ctrl减选），Shift滚轮调边数，Tab切换方向，右键取消"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -226,8 +236,8 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
     jump_threshold: bpy.props.FloatProperty(
         name="跳跃阈值", default=0.1, min=0.0, max=1.0)
     steps: bpy.props.IntProperty(
-        name="延伸步数", description="从起始边向外延伸的边数 (0为仅选中当前边)",
-        default=1000, min=0, max=10000)
+        name="延伸步数", description="向两端延伸的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
+        default=0, min=-10000, max=10000)
     trace_dir: bpy.props.EnumProperty(
         name="延伸方向",
         items=[
@@ -272,13 +282,32 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
                 _draw_callback, (self, context), 'WINDOW', 'POST_VIEW')
             add_modal_border(self, context)
             context.window.cursor_modal_set('CROSSHAIR')
-            context.workspace.status_text_set(
-                "悬浮预览非流形循环边链 | S设置 | 左键确定 | Shift加选 Ctrl减选 | 右键/ESC退出")
+            self._update_status_text(context)
             context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
         except Exception:
             self._cleanup(context)
             return {'CANCELLED'}
+
+    def _update_status_text(self, context):
+        s = _get_loop_settings(context)
+        # 单边模式下负数表示反向延伸，方向名随符号翻转
+        base_dir = {'BOTH': '双向', 'DIR_A': '方向A', 'DIR_B': '方向B'}[s.trace_dir]
+        if s.trace_dir == 'DIR_A':
+            dir_name = '方向B' if s.steps < 0 else '方向A'
+        elif s.trace_dir == 'DIR_B':
+            dir_name = '方向A' if s.steps < 0 else '方向B'
+        else:
+            dir_name = base_dir
+        steps_text = '不限' if s.steps == 0 else str(s.steps)
+        text = (
+            f"悬浮预览非流形循环边链 | 边数:{steps_text}(Shift滚轮) | "
+            f"方向:{dir_name}(Tab) | S设置 | 左键确定 | Shift加选 Ctrl减选 | 右键/ESC退出"
+        )
+        try:
+            context.workspace.status_text_set(text)
+        except Exception:
+            pass
 
     def modal(self, context, event):
         try:
@@ -290,6 +319,27 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
             elif event.type == 'S' and event.value == 'PRESS':
                 # S 调用独立设置面板，确认后返回当前模态继续
                 bpy.ops.better_experie.nonmanifold_edge_loop_settings('INVOKE_DEFAULT')
+                self._update_status_text(context)
+                return {'RUNNING_MODAL'}
+
+            elif event.type == 'TAB' and event.value == 'PRESS':
+                # Tab 切换延伸方向
+                s = _get_loop_settings(context)
+                order = ['BOTH', 'DIR_A', 'DIR_B']
+                s.trace_dir = order[(order.index(s.trace_dir) + 1) % len(order)]
+                self._update_hover(context, event)
+                self._update_status_text(context)
+                return {'RUNNING_MODAL'}
+
+            elif event.type in {'WHEELUPMOUSE', 'WHEELDOWNMOUSE'} and event.shift:
+                # Shift 滚轮增加/减少延伸边数
+                s = _get_loop_settings(context)
+                if event.type == 'WHEELUPMOUSE':
+                    s.steps = min(s.steps + 1, 10000)
+                else:
+                    s.steps = max(s.steps - 1, -10000)
+                self._update_hover(context, event)
+                self._update_status_text(context)
                 return {'RUNNING_MODAL'}
 
             elif event.type == 'LEFTMOUSE' and event.value == 'PRESS':

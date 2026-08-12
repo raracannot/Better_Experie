@@ -1,4 +1,4 @@
-# 锐边/边界连续链选择（交互式模态），支持Tab切换模式、Alt切换分叉行为，带GPU实时预览与左下角操作说明
+# 锐边/边界/UV缝合边连续链选择（交互式模态），支持Tab切换模式、Alt切换分叉行为，带GPU实时预览与左下角操作说明
 
 import bpy
 import bmesh
@@ -9,9 +9,22 @@ from mathutils.bvhtree import BVHTree
 from bpy_extras import view3d_utils
 from ...utils.modal_border import add_modal_border, remove_modal_border
 
+MODE_ORDER = ('SHARP', 'BOUNDARY', 'UV_SEAM')
+MODE_NAMES = {
+    'SHARP': '锐边',
+    'BOUNDARY': '边界',
+    'UV_SEAM': 'UV缝合边',
+}
+
 
 def _is_target(edge, mode):
-    return (not edge.smooth) if mode == 'SHARP' else (len(edge.link_faces) == 1)
+    if mode == 'SHARP':
+        return not edge.smooth
+    if mode == 'BOUNDARY':
+        return len(edge.link_faces) == 1
+    if mode == 'UV_SEAM':
+        return edge.seam
+    return False
 
 
 def _get_continuous_chain(start_edge, mode, stop_at_junctions):
@@ -49,7 +62,11 @@ def _draw_callback_3d(self, context):
             if self.batch_unsel:
                 gpu.state.depth_test_set(depth_mode)
                 gpu.state.line_width_set(3.0)
-                color = (0.0, 0.4, 1.0, 0.5) if self.mode == 'SHARP' else (0.1, 1.0, 0.2, 0.6)
+                color = {
+                    'SHARP': (0.0, 0.4, 1.0, 0.5),
+                    'BOUNDARY': (0.1, 1.0, 0.2, 0.6),
+                    'UV_SEAM': (0.9, 0.4, 0.0, 0.7),
+                }[self.mode]
                 self.shader.uniform_float("color", color)
                 self.batch_unsel.draw(self.shader)
 
@@ -77,8 +94,8 @@ def _draw_callback_3d(self, context):
 
 class BetterExperie_OT_SelectSharpChain(bpy.types.Operator):
     bl_idname = "better_experie.select_sharp_chain"
-    bl_label = "选择锐边/边界连续链"
-    bl_description = "交互式选择锐边或边界链：按住左键刷选，支持Shift加选Ctrl减选、Tab切换模式、Alt切换分叉行为"
+    bl_label = "选择锐边/边界/UV缝合边连续链"
+    bl_description = "交互式选择锐边、边界或UV缝合边连续链：按住左键刷选，支持Shift加选Ctrl减选、Tab切换模式、Alt切换分叉行为"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -136,10 +153,10 @@ class BetterExperie_OT_SelectSharpChain(bpy.types.Operator):
 
     def _update_status_text(self, context):
         """左下角操作说明"""
-        mode_name = '锐边' if self.mode == 'SHARP' else '边界'
+        mode_name = MODE_NAMES[self.mode]
         fork_name = '全选' if self.is_alt_pressed else '断开'
         text = (
-            f"选择{'锐边' if self.mode == 'SHARP' else '边界'}连续链 | "
+            f"选择{mode_name}连续链 | "
             f"模式:{mode_name}(Tab) | 分叉:{fork_name}(Alt) | "
             "左键按住刷选 | Shift加选 Ctrl减选 | 右键退出"
         )
@@ -179,7 +196,7 @@ class BetterExperie_OT_SelectSharpChain(bpy.types.Operator):
                 return {'PASS_THROUGH'}
 
             elif event.type == 'TAB' and event.value == 'PRESS':
-                self.mode = 'BOUNDARY' if self.mode == 'SHARP' else 'SHARP'
+                self.mode = MODE_ORDER[(MODE_ORDER.index(self.mode) + 1) % len(MODE_ORDER)]
                 self._refresh_gpu_data(context)
                 self._update_hover(context, event)
                 self._update_status_text(context)

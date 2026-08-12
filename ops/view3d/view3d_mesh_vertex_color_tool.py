@@ -3,6 +3,11 @@
 import bpy
 import bmesh
 import math
+import time
+import numpy as np
+import gpu
+from gpu_extras.batch import batch_for_shader
+
 
 class BetterExperie_VertexColorSettings(bpy.types.PropertyGroup):
     color: bpy.props.FloatVectorProperty(
@@ -57,6 +62,255 @@ def _blend_color(old_c, new_c, mode):
 
 def _color_distance(c1, c2):
     return math.sqrt((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2 + (c1[2] - c2[2]) ** 2)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 预览顶点颜色（GPU 高亮预览，参考 预览顶点组 的渐隐贴片实现）
+# ═══════════════════════════════════════════════════════════════
+
+_preview_state = {
+    "handler": None,
+    "coords_np": None,
+    "colors_np": None,
+    "alpha": 1.0,
+    "start_time": 0,
+}
+
+_gpu_buf = {
+    "idx_seq": None,
+    "n_coords": 0,
+}
+
+_ANGLES = np.array([i * math.pi / 4.0 for i in range(8)], dtype=np.float32)
+_COS_A = np.cos(_ANGLES)
+_SIN_A = np.sin(_ANGLES)
+
+
+def _get_or_build_idx_seq(n_coords):
+    if _gpu_buf["n_coords"] == n_coords and _gpu_buf["idx_seq"] is not None:
+        return _gpu_buf["idx_seq"]
+
+    count = n_coords * 8 * 3
+    idx = np.empty(count, dtype=np.int32)
+    off = 0
+    for i in range(n_coords):
+        center = i * 9
+        for j in range(8):
+            p1 = center + 1 + j
+            p2 = center + 1 + (j + 1) % 8
+            idx[off] = center
+            idx[off + 1] = p1
+            idx[off + 2] = p2
+            off += 3
+
+    _gpu_buf["idx_seq"] = idx
+    _gpu_buf["n_coords"] = n_coords
+    return idx
+
+
+def _find_rv3d():
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == 'VIEW_3D':
+                return area.spaces.active.region_3d
+    return None
+
+
+def _draw_callback_px():
+    coords_np = _preview_state.get("coords_np")
+    colors_np = _preview_state.get("colors_np")
+    if coords_np is None or colors_np is None or _preview_state["alpha"] <= 0:
+        return
+
+    rv3d = _find_rv3d()
+    if not rv3d:
+        return
+
+    try:
+        view_inv = rv3d.view_matrix.inverted()
+        cam_right = np.array(view_inv.col[0].to_3d().normalized(), dtype=np.float32)
+        cam_up = np.array(view_inv.col[1].to_3d().normalized(), dtype=np.float32)
+        cam_pos = np.array(view_inv.translation, dtype=np.float32)
+
+        n = len(coords_np)
+        if rv3d.is_perspective:
+            radii = np.linalg.norm(coords_np - cam_pos, axis=1, keepdims=True) * 0.002
+        else:
+            radii = np.full((n, 1), rv3d.view_distance * 0.002, dtype=np.float32)
+
+        total = n * 9
+        all_verts = np.empty((total, 3), dtype=np.float32)
+        all_verts[0::9] = coords_np
+        all_colors = np.empty((total, 4), dtype=np.float32)
+        all_colors[0::9] = colors_np
+
+        for i in range(8):
+            direction = cam_right * _COS_A[i] + cam_up * _SIN_A[i]
+            all_verts[i + 1::9] = coords_np + direction * radii
+            all_colors[i + 1::9] = colors_np
+
+        all_colors[:, 3] = _preview_state["alpha"]
+
+        idx_seq = _get_or_build_idx_seq(n)
+        shader = gpu.shader.from_builtin('SMOOTH_COLOR')
+        batch = batch_for_shader(
+            shader, 'TRIS',
+            {"pos": all_verts, "color": all_colors},
+            indices=idx_seq)
+
+        is_xray = False
+        if bpy.context.space_data and bpy.context.space_data.type == 'VIEW_3D':
+            is_xray = bpy.context.space_data.shading.show_xray
+
+        gpu.state.blend_set('ALPHA')
+        if is_xray:
+            gpu.state.depth_test_set('NONE')
+        else:
+            gpu.state.depth_test_set('LESS_EQUAL')
+
+        shader.bind()
+        batch.draw(shader)
+    except ReferenceError:
+        pass
+    except Exception:
+        import traceback
+        traceback.print_exc()
+    finally:
+        gpu.state.blend_set('NONE')
+        gpu.state.depth_test_set('LESS_EQUAL')
+
+
+def _timer_fade_out():
+    elapsed = time.time() - _preview_state["start_time"]
+
+    if elapsed > 1.0:
+        _remove_draw_handler()
+        _tag_redraw_all_3dviews()
+        return None
+
+    _preview_state["alpha"] = 1.0 - elapsed
+    _tag_redraw_all_3dviews()
+    return 0.03
+
+
+def _remove_draw_handler():
+    if _preview_state["handler"]:
+        bpy.types.SpaceView3D.draw_handler_remove(_preview_state["handler"], 'WINDOW')
+        _preview_state["handler"] = None
+        _preview_state["coords_np"] = None
+        _preview_state["colors_np"] = None
+
+    _gpu_buf["idx_seq"] = None
+    _gpu_buf["n_coords"] = 0
+
+
+def _tag_redraw_all_3dviews():
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.tag_redraw()
+
+
+def _collect_vertex_colors(obj, context):
+    """收集全部顶点的世界坐标及其顶点色，返回 (coords, colors) 或 None"""
+    mesh = obj.data
+    active_color = mesh.color_attributes.active_color
+    if not active_color:
+        return None
+
+    matrix_world = obj.matrix_world
+    layer_name = active_color.name
+    domain = active_color.domain
+
+    coords = []
+    colors = []
+
+    if context.mode == 'EDIT_MESH':
+        bm = bmesh.from_edit_mesh(mesh)
+        if domain == 'POINT':
+            color_layer = bm.verts.layers.color.get(layer_name)
+            if color_layer is None:
+                color_layer = bm.verts.layers.float_color.get(layer_name)
+            if color_layer is None:
+                return None
+            for v in bm.verts:
+                coords.append(matrix_world @ v.co.copy())
+                colors.append(tuple(v[color_layer]))
+        else:  # CORNER：取每个顶点的首个拐角颜色作为代表色
+            color_layer = bm.loops.layers.color.get(layer_name)
+            if color_layer is None:
+                color_layer = bm.loops.layers.float_color.get(layer_name)
+            if color_layer is None:
+                return None
+            vert_color_map = {}
+            for face in bm.faces:
+                for loop in face.loops:
+                    vi = loop.vert.index
+                    if vi not in vert_color_map:
+                        vert_color_map[vi] = tuple(loop[color_layer])
+            for v in bm.verts:
+                if v.index in vert_color_map:
+                    coords.append(matrix_world @ v.co.copy())
+                    colors.append(vert_color_map[v.index])
+    else:
+        if domain == 'POINT':
+            for i, v in enumerate(mesh.vertices):
+                coords.append(matrix_world @ v.co.copy())
+                colors.append(tuple(active_color.data[i].color))
+        else:  # CORNER：取每个顶点的首个拐角颜色作为代表色
+            vert_color_map = {}
+            loops = mesh.loops
+            for li, loop in enumerate(loops):
+                vi = loop.vertex_index
+                if vi not in vert_color_map:
+                    vert_color_map[vi] = tuple(active_color.data[li].color)
+            for v in mesh.vertices:
+                if v.index in vert_color_map:
+                    coords.append(matrix_world @ v.co.copy())
+                    colors.append(vert_color_map[v.index])
+
+    if not coords:
+        return None
+    return coords, colors
+
+
+class BetterExperie_OT_PreviewVertexColor(bpy.types.Operator):
+    bl_idname = "better_experie.preview_vertex_color"
+    bl_label = "快速预览"
+    bl_description = "在3D视图中按顶点色高亮显示全部顶点（1秒渐隐）"
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj and obj.type == 'MESH'
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            return {'CANCELLED'}
+
+        result = _collect_vertex_colors(obj, context)
+        if result is None:
+            self.report({'INFO'}, "没有活动的颜色属性层")
+            return {'CANCELLED'}
+
+        coords, colors = result
+        _remove_draw_handler()
+        _preview_state["coords_np"] = np.array(coords, dtype=np.float32)
+        _preview_state["colors_np"] = np.array(colors, dtype=np.float32)
+        _preview_state["alpha"] = 1.0
+        _preview_state["start_time"] = time.time()
+
+        _preview_state["handler"] = bpy.types.SpaceView3D.draw_handler_add(
+            _draw_callback_px, (), 'WINDOW', 'POST_VIEW'
+        )
+
+        if not bpy.app.timers.is_registered(_timer_fade_out):
+            bpy.app.timers.register(_timer_fade_out)
+
+        _tag_redraw_all_3dviews()
+        return {'FINISHED'}
 
 
 class BetterExperie_OT_MeshApplyVertexColor(bpy.types.Operator):
@@ -225,12 +479,15 @@ def draw_vertex_color_tool(self, context):
     op_sel.only_selected = True
     row.separator()
     row.operator("better_experie.mesh_select_similar_vertex_color", text="选中颜色", icon='RESTRICT_SELECT_OFF')
+    row.separator()
+    row.operator("better_experie.preview_vertex_color", text="预览顶点色", icon='RESTRICT_VIEW_OFF')
 
 
 classes = (
     BetterExperie_VertexColorSettings,
     BetterExperie_OT_MeshApplyVertexColor,
     BetterExperie_OT_MeshSelectSimilarVertexColor,
+    BetterExperie_OT_PreviewVertexColor,
 )
 
 
@@ -243,6 +500,9 @@ def register():
 
 def unregister():
     bpy.types.DATA_PT_vertex_colors.remove(draw_vertex_color_tool)
+    _remove_draw_handler()
+    if bpy.app.timers.is_registered(_timer_fade_out):
+        bpy.app.timers.unregister(_timer_fade_out)
     del bpy.types.Scene.better_experie_vertex_color_settings
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

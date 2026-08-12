@@ -22,6 +22,24 @@ HOTKEY_CONFIGS = (
         "value": "PRESS",
         "ctrl": True,
     },
+    {
+        "label": "对调隐藏（编辑网格）",
+        "idname": "better_experie.toggle_hidden",
+        "km": "Mesh",
+        "type": "H",
+        "value": "PRESS",
+        "ctrl": True,
+        "shift": True,
+    },
+    {
+        "label": "对调隐藏（物体）",
+        "idname": "better_experie.toggle_hidden",
+        "km": "Object Mode",
+        "type": "H",
+        "value": "PRESS",
+        "ctrl": True,
+        "shift": True,
+    },
 )
 
 # 记录 addon keyconfig 中已注册的 (keymap, keymap_item)，用于注销时精确清理
