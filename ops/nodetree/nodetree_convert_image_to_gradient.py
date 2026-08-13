@@ -627,7 +627,10 @@ class BetterExperie_ImageToGradient_BASE(bpy.types.Operator):
         #可任意替换，但必须初始化 preview_image 和 new_node_location
         node = context.active_node
         if not node or not hasattr(node, "image") or not node.image:
+            self.preview_image = None
+            self.new_node_location = None
             self.report({"WARNING"}, "请选择带图像的节点")
+            return
         # 初始化图像数据
         self.preview_image = node.image
         self.new_node_location = (node.location.x + 200, node.location.y)
@@ -971,7 +974,10 @@ class BetterExperie_OT_ConvertImageToGradient(BetterExperie_ImageToGradient_BASE
         #可任意替换，但必须初始化 preview_image 和 new_node_location
         node = context.active_node
         if not node or not hasattr(node, "image") or not node.image:
+            self.preview_image = None
+            self.new_node_location = None
             self.report({"WARNING"}, "请选择带图像的节点")
+            return
         # 初始化图像数据
         self.preview_image = node.image
         self.new_node_location = (node.location.x + 200, node.location.y)

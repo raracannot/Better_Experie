@@ -149,6 +149,8 @@ data = {
     "更多网格": "More Meshes",
     "更好的体验": "Better Experience",
     "更新链接": "Update Links",
+    "检查更新": "Check Updates",
+    "检查更新 | 检测网络与目录权限，确保 RARA 插件库存在并跳转至 Get Extensions 查看更新": "Check Updates | Verify network and folder permissions, ensure the RARA repository exists, and jump to Get Extensions",
     "材质染色工具": "Material Dye Tool",
     "染色": "Tint",
     "正向堆叠": "Stack Forward",

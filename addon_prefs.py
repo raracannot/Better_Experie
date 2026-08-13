@@ -29,12 +29,15 @@ def draw_description_panel(layout, context):
     # col.separator(type="LINE")
     row = col.row(align=True)
     row.operator("wm.url_open", text="功能介绍", icon="HELP").url = "https://space.bilibili.com/27284213"#待发布后补充
-    row.operator("wm.url_open", text="更新链接", icon="FILE_REFRESH").url = "https://pan.baidu.com/s/1aOYSzA_FobChbegOAWHACg?pwd=RARA"
-
+    # row.operator("wm.url_open", text="更新链接", icon="FILE_REFRESH").url = "https://pan.baidu.com/s/1aOYSzA_FobChbegOAWHACg?pwd=RARA"
+    row.operator("better_experie.check_update", text="检查更新", icon="FILE_REFRESH")
+    
     row.separator()
     row.operator("wm.url_open", text="哔哩哔哩", icon="USER").url = "https://space.bilibili.com/27284213"
     row.operator("wm.url_open", text="官方库", icon="BLENDER").url = "https://extensions.blender.org/author/58486/"
     row.operator("wm.url_open", text="Github", icon="FILE_SCRIPT").url = "https://github.com/raracannot/Better_Experie"#待发布后补充
+
+
 
 def draw_thanks_panel(layout, context):
     box=layout.box()
@@ -74,14 +77,15 @@ def draw_thanks_panel(layout, context):
     col.label(text="帮助致谢（按名称首字母排序）",icon="FUND")
     col.separator(type="LINE")
     up_list = [
-        ("摘星陈的插件仓库", "HEART", "https://space.bilibili.com/289597239/"),
-        ("只剩一瓶辣椒酱", "BLENDER", "https://extensions.blender.org/author/445/"),
-        ("一尘不染月当天", "BLENDER", "https://extensions.blender.org/author/30/"),
-        ("亮锅不服lao", "HEART", "https://space.bilibili.com/429605217/"),
-        ("whatwhyhow", "HEART", "https://space.bilibili.com/3824431/"),
-        ("漓舒s", "HEART", "https://space.bilibili.com/500957923/"),
-        ("olpha", "INTERNET", "https://olpha.cn/"),
-        ("睡梦", "BLENDER", "https://extensions.blender.org/author/3361/"),
+        ("摘星陈的插件仓库", "HEART", "https://space.bilibili.com/289597239/"), #关键功能代码片段
+        ("只剩一瓶辣椒酱", "BLENDER", "https://extensions.blender.org/author/445/"), #开发知识援助
+        ("一尘不染月当天", "BLENDER", "https://extensions.blender.org/author/30/"), #开发知识援助
+        ("亮锅不服lao", "HEART", "https://space.bilibili.com/429605217/"), #开发知识援助
+        ("whatwhyhow", "HEART", "https://space.bilibili.com/3824431/"), #重要改进意见
+        ("漓舒s", "HEART", "https://space.bilibili.com/500957923/"), #关键功能代码片段
+        ("olpha", "INTERNET", "https://olpha.cn/"), #关键功能代码片段
+        ("睡梦", "BLENDER", "https://extensions.blender.org/author/3361/"), #开发知识援助
+        ("浪里浇花", "HEART", "https://space.bilibili.com/382662799/"), #重要改进意见
     ]
     up_list.sort(key=lambda item: item[0])
     row = None
