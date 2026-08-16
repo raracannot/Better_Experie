@@ -8,6 +8,7 @@ MODULE_NAMES = [
     "view3d_edit_bbox",
     "view3d_empty_wireframe",
     "view3d_fix_applied_rotation",
+    "view3d_obj_fix_rotation_by_face",
     "view3d_parent_transform",
     "view3d_mesh_filter_batch_selector", #筛查式选择卡
     "view3d_obj_apply_all_modifiers", #应用所有修改器
@@ -23,6 +24,7 @@ MODULE_NAMES = [
     "view3d_obj_elements_clipboard",
     "view3d_obj_modifier_tools",
     "view3d_obj_clear_viewport_shading",
+    "view3d_obj_clear_materials",
     "view3d_collection_visibility",
     "view3d_mesh_separate_edges_to_curve",
     "view3d_mesh_flip_normals_by_view",
@@ -37,6 +39,7 @@ MODULE_NAMES = [
     "view3d_mesh_vertex_color_tool",
     "view3d_mesh_vertex_group_stats",
     "view3d_obj_visual_uv_projection",
+    "view3d_obj_preview_parent_vertices",
     "view3d_mesh_reset_local_normals",
     "view3d_mesh_select_ring_edges",
     "view3d_mesh_select_nonmanifold_edge_loop",

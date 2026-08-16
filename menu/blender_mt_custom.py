@@ -147,6 +147,7 @@ def draw_object_clear(self, context):
     layout.separator()
     layout.operator("better_experie.fix_applied_rotation", icon="DRIVER_ROTATIONAL_DIFFERENCE")
     layout.operator("better_experie.fix_applied_rotation_by_normals", icon="DRIVER_ROTATIONAL_DIFFERENCE")
+    layout.operator("better_experie.fix_rotation_by_face", text="以指定面修复旋转", icon="FACESEL")
 
 
 # ── 物体应用变换 ──
@@ -168,6 +169,7 @@ def draw_object_cleanup(self, context):
     layout = self.layout
     layout.separator()
     layout.operator("better_experie.clear_viewport_shading", text="清理视图着色", icon='SHADING_SOLID')
+    layout.operator("better_experie.clear_materials", text="清理材质", icon='SHADING_TEXTURE')
     layout.operator("mesh.customdata_custom_splitnormals_clear", text="清理自定义法向", icon='NORMALS_VERTEX')
 
 
