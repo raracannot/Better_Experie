@@ -121,7 +121,8 @@ def draw_nearest_orthogonal(self, context):
 def draw_view_cameras(self, context):
     layout = self.layout
     layout.separator(type="LINE")
-    layout.operator("better_experie.create_new_camera_at_view")
+    layout.operator("better_experie.create_new_camera_at_view", icon="SCENE")
+    layout.operator("better_experie.hitchcock_zoom", text="希区柯克变焦", icon="VIEW_CAMERA")
 
 
 # ── 物体镜像 ──
@@ -239,6 +240,7 @@ def register():
     bpy.types.VIEW3D_MT_view_cameras.append(draw_view_cameras)
     bpy.types.VIEW3D_MT_mirror.append(draw_mirror)
     bpy.types.VIEW3D_MT_object_modifiers.append(draw_object_modifiers)
+    bpy.types.VIEW3D_MT_transform_object.append(draw_object_clear) 
     bpy.types.VIEW3D_MT_object_clear.append(draw_object_clear)
     bpy.types.VIEW3D_MT_object_apply.append(draw_object_apply)
     bpy.types.VIEW3D_MT_object_cleanup.append(draw_object_cleanup)
@@ -268,6 +270,7 @@ def unregister():
     bpy.types.VIEW3D_MT_view_cameras.remove(draw_view_cameras)
     bpy.types.VIEW3D_MT_mirror.remove(draw_mirror)
     bpy.types.VIEW3D_MT_object_modifiers.remove(draw_object_modifiers)
+    bpy.types.VIEW3D_MT_transform_object.remove(draw_object_clear) 
     bpy.types.VIEW3D_MT_object_clear.remove(draw_object_clear)
     bpy.types.VIEW3D_MT_object_apply.remove(draw_object_apply)
     bpy.types.VIEW3D_MT_object_cleanup.remove(draw_object_cleanup)

@@ -2,7 +2,7 @@
 bl_info = {
     "name": "Better_Experie【更好的体验】",
     "author": "RARA(来一点咖啡吗)",
-    "version": (1, 0, 4),
+    "version": (1, 0, 5),
     "blender": (4, 5, 0),
     'doc_url': 'https://space.bilibili.com/27284213',
 }
