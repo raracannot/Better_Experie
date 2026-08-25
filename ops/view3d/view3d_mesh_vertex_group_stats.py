@@ -9,6 +9,7 @@ import time
 import math
 from bpy.app.handlers import persistent
 
+# 顶点组可视化##########################################################################
 _stats_cache = {}
 
 _preview_state = {
@@ -204,14 +205,135 @@ class BetterExperie_OT_PreviewVertexGroup(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# 雕刻模式顶点组工具##########################################################################
+
+def get_mask_attr(obj, create=False):
+    mask_attr = obj.data.attributes.get(".sculpt_mask")
+    if mask_attr is None and create:
+        mask_attr = obj.data.attributes.new(name=".sculpt_mask", type='FLOAT', domain='POINT')
+    return mask_attr
+
+def switch_mode(mode):
+    if bpy.context.active_object.mode != mode:
+        bpy.ops.object.mode_set(mode=mode)
+
+# --- 运算符定义 ---
+
+class BetterExperie_OT_MaskToVertexGroups(bpy.types.Operator):
+    """将当前遮罩区域指定给活动顶点组"""
+    bl_idname = "better_experie.mask_to_vertex_groups"
+    bl_label = "指定遮罩到顶点组"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    action: bpy.props.EnumProperty(items=[('ADD', "Add", ""), ('REMOVE', "Remove", "")])
+
+    def execute(self, context):
+        obj = context.active_object
+        active_group = obj.vertex_groups.active
+        if not active_group:
+            self.report({'WARNING'}, "没有活动的顶点组")
+            return {'CANCELLED'}
+
+        mask_attr = get_mask_attr(obj)
+        if not mask_attr:
+            self.report({'WARNING'}, "当前没有遮罩数据")
+            return {'CANCELLED'}
+
+        switch_mode('OBJECT')
+        
+        for i, data in enumerate(mask_attr.data):
+            weight = data.value
+            if weight > 0.001: # 阈值判断
+                if self.action == 'ADD':
+                    active_group.add([i], weight, 'REPLACE')
+                else:
+                    active_group.remove([i])
+        
+        switch_mode('SCULPT')
+        return {'FINISHED'}
+
+class BetterExperie_OT_VertexToGroupsMask(bpy.types.Operator):
+    """将活动顶点组权重转换为雕刻遮罩"""
+    bl_idname = "better_experie.vertex_groups_to_mask"
+    bl_label = "顶点组到遮罩"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    action: bpy.props.EnumProperty(items=[('ADD', "Add", ""), ('SUB', "Subtract", "")])
+
+    def execute(self, context):
+        obj = context.active_object
+        active_group = obj.vertex_groups.active
+        if not active_group:
+            self.report({'WARNING'}, "没有活动的顶点组")
+            return {'CANCELLED'}
+
+        switch_mode('OBJECT')
+        
+        mask_attr = get_mask_attr(obj, create=True)
+        
+        for i, v in enumerate(obj.data.vertices):
+            try:
+                vg_weight = active_group.weight(i)
+            except RuntimeError:
+                vg_weight = 0.0
+            
+            current_mask = mask_attr.data[i].value
+            if self.action == 'ADD':
+                mask_attr.data[i].value = min(1.0, current_mask + vg_weight)
+            else:
+                mask_attr.data[i].value = max(0.0, current_mask - vg_weight)
+        
+        obj.data.update()
+        switch_mode('SCULPT')
+        return {'FINISHED'}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def draw_vertex_group_stats(self, context):
+    # 仅在雕刻模式下显示
+    layout = self.layout
+    
+    # 基础过滤
     obj = context.active_object
     if not obj or obj.type != 'MESH':
         return
     active_vg = obj.vertex_groups.active
     if not active_vg:
         return
+    
+    # 仅在雕刻模式下显示
+    if context.mode == 'SCULPT':
+        # layout = self.layout
+        # 指定/移除 (Mask -> VG)
+        row = layout.row(align=True)
+        op_add = row.operator("better_experie.mask_to_vertex_groups", text="遮罩写入顶点组")
+        op_add.action = 'ADD'
+        op_rem = row.operator("better_experie.mask_to_vertex_groups", text="遮罩移出顶点组")
+        op_rem.action = 'REMOVE'
+        row.separator()
+        # 选择/弃选 (VG -> Mask)
+        op_sel = row.operator("better_experie.vertex_groups_to_mask", text="选为遮罩")
+        op_sel.action = 'ADD'
+        op_desel = row.operator("better_experie.vertex_groups_to_mask", text="弃选遮罩")
+        op_desel.action = 'SUB'
 
+    #顶点组可视化
     vg_index = active_vg.index
     verts_in_group = 0
     total_mesh_verts = 0
@@ -232,7 +354,7 @@ def draw_vertex_group_stats(self, context):
                     verts_in_group += 1
                     break
 
-    layout = self.layout
+    # layout = self.layout
     box = layout.box()
     row = box.row()
     row.label(text=f"{active_vg.name}: {verts_in_group}/{total_mesh_verts}", icon='GROUP_VERTEX')
@@ -241,6 +363,8 @@ def draw_vertex_group_stats(self, context):
 
 classes = (
     BetterExperie_OT_PreviewVertexGroup,
+    BetterExperie_OT_MaskToVertexGroups,
+    BetterExperie_OT_VertexToGroupsMask,
 )
 
 
