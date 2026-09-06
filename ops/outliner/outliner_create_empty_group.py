@@ -34,7 +34,7 @@ class BetterExperie_OT_CreateEmptyGroup(bpy.types.Operator):
 
         empty = bpy.data.objects.new("Empty_Group", None)
         empty.empty_display_size = 0.001
-        context.collection.objects.link(empty)
+        target_collection.objects.link(empty)
 
         if active_obj:
             empty.parent = active_obj.parent

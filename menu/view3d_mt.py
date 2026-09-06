@@ -8,8 +8,11 @@ class BETTER_EXPERIE_MT_view3d_submenu_object(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
 
-        layout.operator("better_experie.import_clipboard_image_view3d", text="导入剪贴板图像为空物体")
-        layout.label(text="功能补充中")
+        ops = layout.operator("better_experie.import_clipboard_image_view3d", text="导入剪贴板图像为网格")
+        ops.create_view_3d = 'PLANE'
+        ops = layout.operator("better_experie.import_clipboard_image_view3d", text="导入剪贴板图像为空物体")
+        ops.create_view_3d = 'EMPTY'
+        # layout.label(text="功能补充中")
 
      
 class BETTER_EXPERIE_MT_view3d_submenu_mesh(bpy.types.Menu):
