@@ -145,25 +145,43 @@ class BetterExperie_OT_CollectionsToEmpties(bpy.types.Operator):
         bpy.ops.object.select_all(action='DESELECT')
         master_collection = bpy.context.scene.collection
 
-        def check_and_unexclude(layer_collection):
-            if layer_collection.exclude:
-                layer_collection.exclude = False
-            for child in layer_collection.children:
-                check_and_unexclude(child)
-
         view_layer = bpy.context.view_layer
-        check_and_unexclude(view_layer.layer_collection)
 
-        while True:
-            instance_objects = [obj for obj in bpy.data.objects if obj.instance_type == 'COLLECTION']
-            if not instance_objects:
-                break
-            for obj in instance_objects:
-                if obj.name not in context.view_layer.objects:
-                    context.collection.objects.link(obj)
-                obj.select_set(True)
-            bpy.ops.object.duplicates_make_real()
-            bpy.ops.object.select_all(action='DESELECT')
+        # 记录被排除（关闭）的集合，操作结束后恢复，避免强制打开用户的集合
+        excluded_collections = []
+
+        def collect_excluded(layer_collection):
+            if layer_collection.exclude:
+                excluded_collections.append(layer_collection)
+            for child in layer_collection.children:
+                collect_excluded(child)
+
+        def set_exclude_recursive(layer_collection, exclude):
+            layer_collection.exclude = exclude
+            for child in layer_collection.children:
+                set_exclude_recursive(child, exclude)
+
+        collect_excluded(view_layer.layer_collection)
+        set_exclude_recursive(view_layer.layer_collection, False)
+
+        # 临时取消排除以便处理集合实例，之后恢复原状
+        try:
+            while True:
+                instance_objects = [obj for obj in bpy.data.objects if obj.instance_type == 'COLLECTION']
+                if not instance_objects:
+                    break
+                for obj in instance_objects:
+                    if obj.name not in context.view_layer.objects:
+                        context.collection.objects.link(obj)
+                    obj.select_set(True)
+                bpy.ops.object.duplicates_make_real()
+                bpy.ops.object.select_all(action='DESELECT')
+        finally:
+            for layer_collection in excluded_collections:
+                try:
+                    layer_collection.exclude = True
+                except ReferenceError:
+                    pass
 
         selected_collections = [
             id for id in context.selected_ids
@@ -172,20 +190,40 @@ class BetterExperie_OT_CollectionsToEmpties(bpy.types.Operator):
         if not selected_collections:
             selected_collections = list(master_collection.children)
 
+        # 获取集合的原始父集合（不在被选中集合内也算）
+        def get_parent_collection(collection):
+            for col in bpy.data.collections:
+                if collection.name in col.children.keys():
+                    return col
+            return None
+
         collection_hierarchy = {}
+        collection_parent_map = {}
         def collect_collections(collection, parent=None):
             collection_hierarchy[collection] = []
+            collection_parent_map[collection] = parent
             for sub_collection in collection.children:
                 collection_hierarchy[collection].append(sub_collection)
                 collect_collections(sub_collection, collection)
         for col in selected_collections:
-            collect_collections(col)
+            collect_collections(col, get_parent_collection(col))
+
+        # 向上查找最近的非待转换父集合，作为空对象（及其子级）的挂载集合
+        def get_anchor_collection(collection):
+            parent_col = collection_parent_map.get(collection)
+            while parent_col is not None and parent_col in collection_hierarchy:
+                parent_col = collection_parent_map.get(parent_col)
+            return parent_col
 
         # 创建空对象字典，用于存储集合对应的空对象
         empty_objects = {}
         for collection in collection_hierarchy.keys():
             empty_obj = bpy.data.objects.new(collection.name, None)
-            master_collection.objects.link(empty_obj)
+            anchor_collection = get_anchor_collection(collection)
+            if anchor_collection is not None:
+                anchor_collection.objects.link(empty_obj)
+            else:
+                master_collection.objects.link(empty_obj)
             empty_objects[collection] = empty_obj
 
         # 构建空对象的父子层级关系

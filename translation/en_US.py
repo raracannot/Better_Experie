@@ -916,4 +916,13 @@ data = {
 
     # ====== Other =====
     "剪贴板渐变": "Clipboard Gradient",
+
+    # ====== Smart Template ======
+    "智能模板表达式": "Smart Template Expression",
+    "启用智能模板表达式": "Enable Smart Template Expression",
+    "渲染编号": "Render Batch",
+    "路径智能模板表达式": "Directory Template Expression",
+    "文件名智能模板表达式": "File Name Template Expression",
+    "模板错误": "Template Error",
+    "解析后的路径": "Resolved Path",
 }

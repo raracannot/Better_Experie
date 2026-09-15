@@ -9,6 +9,7 @@ MODULE_NAMES = [
     "other_addon_pack",
     "other_auto_save_render",
     "other_background_render",
+    "other_render_smart_template",
     "other_check_update",
     "other_deferred_transparent",
     "other_developer_panel_picker",
