@@ -19,6 +19,7 @@ MODULE_NAMES = [
     "view3d_mesh_face_loop_select",
     "view3d_mesh_smart_close_loop",
     "view3d_mesh_add_vertex_group",
+    "view3d_mesh_edge_groups",
     "view3d_obj_toggle_hidden",
     "view3d_mesh_select_region_by_loop",
     "view3d_obj_elements_clipboard",
