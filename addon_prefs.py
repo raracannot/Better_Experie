@@ -125,10 +125,6 @@ class BetterExperie_Preferences(bpy.types.AddonPreferences):
     filebrowser_show_explorer_heder: bpy.props.BoolProperty(
         name="文件管理器标题栏显示", description="是否显示插件在文件管理器标题栏", default=True)
 
-    show_empty_wireframe_hud: bpy.props.BoolProperty(
-        name="空物体线框 HUD",
-        description="在 3D 视图中为拥有子集的空物体显示边界框线框",
-        default=False)
     show_node_minimap: bpy.props.BoolProperty(
         name="节点预览图",
         description="在节点编辑器左下角显示节点树小地图预览",
@@ -159,9 +155,6 @@ class BetterExperie_Preferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "preferences_panel_selection",text="Cross Select", expand=True)
         if self.preferences_panel_selection == 'SETTING':
-            row = layout.row()
-            row.prop(self, "show_empty_wireframe_hud")
-            
             if context.preferences.view.show_developer_ui:
                 row = layout.row()
                 row.prop(self, "show_debug",text="显示debug功能") #内部debug

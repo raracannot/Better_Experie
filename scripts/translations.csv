@@ -624,7 +624,6 @@ draw_label,Panel 标签,社群招新,Community Recruitment,addon_prefs.py:55
 button_text,Operator 按钮文本,移动游标到所选,Cursor to Selected,ops\view3d\view3d_cursor_to_selected.py:122
 button_text,Operator 按钮文本,移除空白行,Remove Empty Lines,menu\texteditor_mt.py:42; menu\texteditor_mt.py:42; ops\texteditor\texteditor_editing_tool.py:186
 button_text,Operator 按钮文本,空对象转集合,Empties to Collections,menu\outliner_mt.py:13; menu\outliner_mt.py:13; ops\outliner\outliner_convert_empty_collection.py:23
-property_name,属性名,空物体线框 HUD,Empty Wireframe HUD,addon_prefs.py:125; ops\view3d\view3d_empty_wireframe.py:193; ops\view3d\view3d_empty_wireframe.py:275
 report,报告消息,等待生成,Waiting to generate,ops\nodetree\nodetree_compositor_bake_node.py:160
 button_text,Operator 按钮文本,等距色标位置,Equal Spacing Stops,menu\nodetree_mt.py:114; menu\nodetree_mt.py:114
 property_name,属性名,筛查,Filter,ops\nodetree\nodetree_ramp_library.py:456
@@ -796,7 +795,6 @@ property_desc,属性描述,选择打开或跳转文件夹的模式,Choose to ope
 button_text,Operator 按钮文本,选择拓扑,Select Topology,ops\view3d\view3d_mesh_topology_hud.py:788
 property_name,属性名,选择模式,Selection Mode,ops\view3d\view3d_mesh_edge_loop_select.py:40
 property_name,属性名,选择相机,Select Camera,ops\other\other_active_camera_dropdown.py:69
-button_text,Operator 按钮文本,选择空物体 Gizmo,Select Empty Gizmo,ops\view3d\view3d_empty_wireframe.py:97
 property_name,属性名,选择范围,Selection Range,ops\view3d\view3d_obj_filter_batch_selector.py:104
 property_desc,属性描述,选择要保存的文件格式,Choose the file format to save,ops\nodetree\nodetree_compositor_bake_node.py:56
 property_desc,属性描述,选择要应用的曲线预设,Choose a curve preset to apply,ops\nodetree\nodetree_color_curve_tools.py:58

@@ -561,12 +561,7 @@ class BETTER_EXPERIE_PT_edge_groups(bpy.types.Panel):
         if active_group is None:
             return
 
-        layout.separator()
-
         if obj.mode == 'EDIT':
-            layout.use_property_split = True
-            layout.use_property_decorate = False
-            layout.prop(window_manager,"better_experie_edge_group_weight",text="Weight",)
             row = layout.row(align=True)
             assign_operator = row.operator("better_experie.edge_group_assign",text="分配")
             assign_operator.weight = window_manager.better_experie_edge_group_weight
@@ -574,11 +569,12 @@ class BETTER_EXPERIE_PT_edge_groups(bpy.types.Panel):
             row.separator()
             row.operator("better_experie.edge_group_select", text="选择")
             row.operator("better_experie.edge_group_deselect", text="取消选择")
-        else:
-            layout.label(text="编辑模式下可创建边组、设置权重和分配边。",icon='INFO',)
-
-        layout.separator()
-        layout.operator("better_experie.edge_group_preview",text="预览边线",icon='HIDE_OFF')
+        
+            layout.use_property_split = True
+            layout.use_property_decorate = False
+            layout.prop(window_manager,"better_experie_edge_group_weight",text="Weight",)
+                    
+        layout.operator("better_experie.edge_group_preview",text="预览边线",icon='RESTRICT_VIEW_OFF')
 
 
 # ------------------------------------------------------------------------

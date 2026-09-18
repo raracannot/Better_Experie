@@ -6,7 +6,6 @@ import importlib
 MODULE_NAMES = [
     "view3d_cursor_to_selected",
     "view3d_edit_bbox",
-    "view3d_empty_wireframe",
     "view3d_fix_applied_rotation",
     "view3d_obj_fix_rotation_by_face",
     "view3d_parent_transform",

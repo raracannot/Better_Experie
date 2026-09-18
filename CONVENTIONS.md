@@ -492,8 +492,6 @@ def draw_callback():
 现有参考：
 - `ops/view3d/view3d_mesh_modal_weld.py:26-63` — invoke 中 try/except 包裹初始化
 - `ops/view3d/view3d_mesh_modal_weld.py:197-201` — modal 中 try/except 包裹事件处理，附带 `traceback.format_exc()` + `self.report()`
-- `ops/view3d/view3d_empty_wireframe.py:156-161` — draw 回调中捕获 `ReferenceError`
-- `ops/view3d/view3d_empty_wireframe.py:258-263` — draw_prepare 中捕获 `ReferenceError`
 - `ops/view3d/view3d_mesh_topology_hud.py:651-654` — finally 中恢复 GPU 状态
 
 ---
@@ -635,7 +633,6 @@ def draw(context):
 现有参考：
 - `ops/view3d/view3d_mesh_topology_hud.py:584-589` — X-ray 模式下使用 `'NONE'`
 - `ops/view3d/view3d_mesh_vertex_group_stats.py:111-119` — 条件深度检测
-- `ops/view3d/view3d_empty_wireframe.py:163-169` — 匹配 X-ray 状态切换深度检测
 
 ---
 
