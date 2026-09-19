@@ -948,4 +948,18 @@ data = {
     "未找到边组数据层": "Edge group data layer not found",
     "没有选中的边": "No edges selected",
     "没有可预览边：请确认边已分配 Weight，且 Weight 大于 0。": "No edges to preview: make sure edges have Weight greater than 0.",
+    # ====== Track Tools / Light Cutoff ======
+    "新建空白追踪": "New Blank Track",
+    "新建空物体追踪": "New Empty Track",
+    "应用追踪": "Apply Track",
+    "辅助线长度": "Guide Line Length",
+    "直接进入视图吸取模式，左键指定追踪目标；Esc 退出并删除约束，右键退出并保留约束": "Enter viewport picking mode; left-click to set the tracking target. Esc exits and removes the constraint; right-click exits and keeps it",
+    "创建沿局部 -Z 方向偏移 1 米的空物体，并将其作为追踪目标": "Create an empty offset 1 m along local -Z and use it as the tracking target",
+    "保留当前追踪后的姿态，并移除全部 Track To 约束；Ctrl 点击时同时删除作为目标的空物体": "Keep the current tracked pose and remove all Track To constraints; Ctrl-click also deletes target empties",
+    "仅相机或灯光可以使用追踪工具": "Only cameras or lights can use track tools",
+    "已取消并清理空白追踪约束": "Cancelled and removed the blank track constraint",
+    "已退出吸取模式，保留当前追踪约束": "Exited picking mode; current track constraint kept",
+    "未吸取到对象，请在 3D 视图中点击目标": "No object picked; click a target in the 3D viewport",
+    "不能将对象自身设为追踪目标": "Cannot set the object itself as the tracking target",
+    "当前对象没有 Track To 追踪约束": "The object has no Track To constraint",
 }

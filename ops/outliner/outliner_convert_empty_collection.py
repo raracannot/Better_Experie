@@ -13,8 +13,111 @@ def is_referenced_by_modifier(empty_obj):
     for obj in bpy.data.objects:
         for mod in obj.modifiers:
             for attr in dir(mod):
-                if getattr(mod, attr) == empty_obj:
+                try:
+                    value = getattr(mod, attr)
+                except Exception:
+                    continue
+                if value == empty_obj:
                     return True
+    return False
+
+
+def is_referenced_by_constraint(empty_obj):
+    """检查是否有约束把该对象设为 target。"""
+    for obj in bpy.data.objects:
+        for con in obj.constraints:
+            try:
+                if getattr(con, "target", None) == empty_obj:
+                    return True
+            except Exception:
+                continue
+    return False
+
+
+def _node_references_object(node, empty_obj):
+    """检查单个节点是否引用了指定对象。"""
+    # 输入端口中的对象默认值（如 Object Info 节点）。
+    for socket in node.inputs:
+        try:
+            if socket.default_value == empty_obj:
+                return True
+        except Exception:
+            continue
+
+    # 部分节点用属性直接保存对象引用（如 Point Density 的 object）。
+    for attr in ("object", "target", "camera"):
+        try:
+            if getattr(node, attr, None) == empty_obj:
+                return True
+        except Exception:
+            continue
+
+    return False
+
+
+def _node_tree_references_object(node_tree, empty_obj):
+    if node_tree is None:
+        return False
+    for node in node_tree.nodes:
+        if _node_references_object(node, empty_obj):
+            return True
+    return False
+
+
+def _geometry_modifier_references_object(mod, node_group, empty_obj):
+    """检查几何节点修改器实例上的 Object 输入。"""
+    try:
+        items = node_group.interface.items_tree
+    except Exception:
+        return False
+
+    for item in items:
+        if getattr(item, "item_type", None) != 'SOCKET':
+            continue
+        if getattr(item, "in_out", None) != 'INPUT':
+            continue
+        if getattr(item, "socket_type", None) != 'NodeSocketObject':
+            continue
+        try:
+            if mod.get(item.identifier) == empty_obj:
+                return True
+        except Exception:
+            continue
+
+    return False
+
+
+def is_referenced_by_nodes(empty_obj):
+    """检查几何节点、着色器节点、纹理节点等是否引用该对象。"""
+    # 所有可复用节点组（含几何节点组、着色器节点组）。
+    for node_group in bpy.data.node_groups:
+        if _node_tree_references_object(node_group, empty_obj):
+            return True
+
+    # 材质 / 世界 / 灯光 的着色器节点树。
+    for material in bpy.data.materials:
+        if _node_tree_references_object(material.node_tree, empty_obj):
+            return True
+
+    for world in bpy.data.worlds:
+        if _node_tree_references_object(world.node_tree, empty_obj):
+            return True
+
+    for light in bpy.data.lights:
+        if _node_tree_references_object(getattr(light, "node_tree", None), empty_obj):
+            return True
+
+    # 几何节点修改器实例上的 Object 输入（值保存在修改器，而非节点组默认值）。
+    for obj in bpy.data.objects:
+        for mod in obj.modifiers:
+            if mod.type != 'NODES':
+                continue
+            node_group = getattr(mod, "node_group", None)
+            if node_group is None:
+                continue
+            if _geometry_modifier_references_object(mod, node_group, empty_obj):
+                return True
+
     return False
 
 
@@ -275,7 +378,7 @@ class BetterExperie_OT_ClearEmptyCollections(bpy.types.Operator):
 class BetterExperie_OT_ClearUselessEmpties(bpy.types.Operator):
     bl_idname = 'better_experie.clear_useless_empties'
     bl_label = "清除无用空物体"
-    bl_description = "遍历场景，当空物体不包含子集且未被其他对象的修改器引用时，将其移除"
+    bl_description = "遍历场景，当空物体不包含子集且未被其他对象的修改器、约束或节点引用时，将其移除"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -287,6 +390,8 @@ class BetterExperie_OT_ClearUselessEmpties(bpy.types.Operator):
                 and obj.empty_display_type != 'IMAGE'
                 and not getChildren(obj)
                 and not is_referenced_by_modifier(obj)
+                and not is_referenced_by_constraint(obj)
+                and not is_referenced_by_nodes(obj)
                 and obj.instance_type == 'NONE'
             ):
                 objects_to_remove.append(obj)

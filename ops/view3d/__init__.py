@@ -33,6 +33,8 @@ MODULE_NAMES = [
     "view3d_obj_import_lib_mesh",
     "view3d_mesh_weld_verts_to_edges",
     "view3d_obj_camera_background",
+    "view3d_light_cutoff_distance",
+    "view3d_obj_track_tools",
     "view3d_obj_hitchcock_zoom",
     "view3d_mesh_modal_weld",
     "view3d_obj_mirror",
