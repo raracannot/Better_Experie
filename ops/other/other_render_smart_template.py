@@ -618,10 +618,10 @@ def smart_template_render_complete(scene):
     update_all_file_output_template_previews(scene)
 
 
-class BetterExperie_PT_SmartTemplate(bpy.types.Panel):
+class BETTER_EXPERIE_PT_smart_template(bpy.types.Panel):
     """渲染输出中的场景智能模板面板。"""
     bl_label = "智能模板表达式"
-    bl_idname = "BetterExperie_PT_SmartTemplate"
+    bl_idname = "BETTER_EXPERIE_PT_smart_template"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "output"
@@ -679,7 +679,7 @@ def draw_smart_template_node_properties(self, context):
 classes = (
     BetterExperie_SmartTemplateSettings,
     BetterExperie_SmartTemplateFileOutputSettings,
-    BetterExperie_PT_SmartTemplate,
+    BETTER_EXPERIE_PT_smart_template,
 )
 
 def register():

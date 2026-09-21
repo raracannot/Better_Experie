@@ -4,6 +4,8 @@ import bpy
 from mathutils import Matrix, Vector
 from bpy_extras import view3d_utils
 
+from ...utils.modal_border import add_modal_border, remove_modal_border
+
 # 记录“新建空白追踪”模态操作中创建的临时约束。
 PENDING_BLANK_TRACK = {"owner": None,"constraint": None,}
 
@@ -42,36 +44,50 @@ def remove_pending_blank_track():
     clear_pending_blank_track()
 
 
+def restore_selection(context, selected_names, active_name):
+    """恢复模态拾取前的对象选择状态。"""
+    try:
+        for obj in context.view_layer.objects:
+            obj.select_set(False)
+        for name in selected_names:
+            obj = bpy.data.objects.get(name)
+            if obj is not None:
+                obj.select_set(True)
+        context.view_layer.objects.active = bpy.data.objects.get(active_name) if active_name else None
+    except Exception:
+        pass
+
+
 class BetterExperie_OT_AddBlankTrack(bpy.types.Operator):
     bl_idname = "better_experie.add_blank_track"
     bl_label = "新建空白追踪"
-    bl_description = "直接进入视图吸取模式，左键指定追踪目标；Esc 退出并删除约束，右键退出并保留约束"
+    bl_description = "直接进入视图/大纲吸取模式，左键指定追踪目标；Esc 退出并删除约束，右键退出并保留约束"
     bl_options = {"REGISTER", "UNDO"}
+
+    _modal_border_handle = None
 
     @classmethod
     def poll(cls, context):
         return is_camera_or_light(context.object)
 
-    def get_view3d_region(self, context, event):
-        """根据鼠标所在位置查找 3D 视图的窗口区域。"""
-        for area in context.window.screen.areas:
-            if area.type != "VIEW_3D":
+    def area_region_under_mouse(self, context, event):
+        """根据鼠标位置查找所在的区域。"""
+        screen = getattr(context, "screen", None)
+        if screen is None:
+            return None, None
+        mouse_x, mouse_y = event.mouse_x, event.mouse_y
+        for area in screen.areas:
+            if not (area.x <= mouse_x < area.x + area.width and area.y <= mouse_y < area.y + area.height):
                 continue
-
             for region in area.regions:
-                if region.type != "WINDOW":
-                    continue
+                if region.type == "WINDOW" and region.x <= mouse_x < region.x + region.width and region.y <= mouse_y < region.y + region.height:
+                    return area, region
+        return None, None
 
-                is_inside = (region.x <= event.mouse_x < region.x + region.width and region.y <= event.mouse_y < region.y + region.height)
-                if is_inside:
-                    return area, region, area.spaces.active.region_3d
-
-        return None, None, None
-
-    def pick_object(self, context, event):
-        """使用鼠标位置射线检测并吸取对象。"""
-        area, region, region_3d = self.get_view3d_region(context, event)
-        if area is None or region is None or region_3d is None:
+    def pick_object(self, context, area, region, event):
+        """在 3D 视图中使用鼠标位置射线检测并吸取对象。"""
+        region_3d = area.spaces.active.region_3d
+        if region_3d is None:
             return None
 
         mouse_pos = Vector((event.mouse_x - region.x, event.mouse_y - region.y,))
@@ -104,8 +120,40 @@ class BetterExperie_OT_AddBlankTrack(bpy.types.Operator):
 
         return closest_object
 
+    def pick_outliner(self, context, area, region):
+        """在大纲中点击以吸取对象。"""
+        old_selected = [obj.name for obj in context.selected_objects]
+        old_active = context.view_layer.objects.active.name if context.view_layer.objects.active else ""
+        before = {obj.name for obj in context.selected_objects}
+
+        try:
+            with context.temp_override(window=context.window, area=area, region=region):
+                bpy.ops.outliner.item_activate("INVOKE_DEFAULT")
+        except Exception as error:
+            print("[Track Tools] Outliner 拾取失败：", error)
+            restore_selection(context, old_selected, old_active)
+            return None
+
+        after = {obj.name for obj in context.selected_objects}
+        hit_names = after - before
+        active_obj = context.view_layer.objects.active
+        if active_obj is not None:
+            hit_names.add(active_obj.name)
+
+        target = None
+        for name in hit_names:
+            candidate = bpy.data.objects.get(name)
+            if candidate is not None and candidate != context.object:
+                target = candidate
+                break
+
+        # 恢复原选择，成功吸取时由 modal 统一改选目标。
+        restore_selection(context, old_selected, old_active)
+        return target
+
     def finish_modal(self, context):
         """恢复鼠标状态及底部状态栏提示。"""
+        remove_modal_border(self)
         try:
             context.window.cursor_modal_restore()
         except RuntimeError:
@@ -137,7 +185,8 @@ class BetterExperie_OT_AddBlankTrack(bpy.types.Operator):
 
             # 进入模态吸取状态。
             context.window.cursor_modal_set("EYEDROPPER")
-            context.workspace.status_text_set("吸取追踪目标：在 3D 视图中左键点击对象；Esc取消；右键退出")
+            context.workspace.status_text_set("吸取追踪目标：在 3D 视图或大纲中左键点击对象；Esc取消；右键退出")
+            add_modal_border(self, context)
             context.window_manager.modal_handler_add(self)
         except Exception as error:
             import traceback
@@ -176,13 +225,19 @@ class BetterExperie_OT_AddBlankTrack(bpy.types.Operator):
                 self.report({"INFO"}, "已退出吸取模式，保留当前追踪约束")
                 return {"FINISHED"}
 
-            # 左键点击时，尝试在 3D 视图中吸取对象。
+            # 左键点击时，尝试在 3D 视图或大纲中吸取对象。
             if event.type == "LEFTMOUSE" and event.value == "PRESS":
-                target = self.pick_object(context, event)
+                area, region = self.area_region_under_mouse(context, event)
+                target = None
+                if area is not None and region is not None:
+                    if area.type == "VIEW_3D":
+                        target = self.pick_object(context, area, region, event)
+                    elif area.type == "OUTLINER":
+                        target = self.pick_outliner(context, area, region)
 
-                # 鼠标不在 3D 视图，或者没有点击到对象时，继续等待。
+                # 鼠标不在 3D 视图/大纲，或者没有点击到对象时，继续等待。
                 if target is None:
-                    self.report({"INFO"}, "未吸取到对象，请在 3D 视图中点击目标")
+                    self.report({"INFO"}, "未吸取到对象，请在 3D 视图或大纲中点击目标")
                     return {"RUNNING_MODAL"}
 
                 # 不允许追踪目标为自身。
