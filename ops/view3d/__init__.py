@@ -43,6 +43,7 @@ MODULE_NAMES = [
     "view3d_mesh_vertex_color_tool",
     "view3d_mesh_vertex_group_stats",
     "view3d_obj_visual_uv_projection",
+    "view3d_viewport_snapshot",
     "view3d_obj_preview_parent_vertices",
     "view3d_mesh_reset_local_normals",
     "view3d_mesh_select_ring_edges",

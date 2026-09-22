@@ -135,6 +135,23 @@ class BetterExperie_Preferences(bpy.types.AddonPreferences):
         description="加载时执行 chcp 65001 切换控制台编码为 UTF-8，避免中文日志乱码（仅 Windows）",
         default=True)
 
+    compare_line_color: bpy.props.FloatVectorProperty(
+        name="对比分割线颜色",
+        description="对比工具（槽位对比/视口快照）的分割线颜色",
+        subtype='COLOR', size=4, min=0.0, max=1.0, default=(1.0, 1.0, 1.0, 1.0))
+    compare_line_width: bpy.props.IntProperty(
+        name="对比分割线宽度",
+        description="对比工具（槽位对比/视口快照）的分割线宽度",
+        min=0, max=50, default=20)
+    show_slot_compare_header: bpy.props.BoolProperty(
+        name="图像编辑器标题栏-渲染槽位对比 快捷入口",
+        description="在图像编辑器标题栏显示槽位对比快捷入口",
+        default=False)
+    show_view3d_screenshot_button: bpy.props.BoolProperty(
+        name="三维编辑器标题栏-视口快照对比 快捷入口",
+        description="在三维视口右上角，显示视口快照的按钮",
+        default=False)
+
     output_path: bpy.props.StringProperty(
             name="打包工具输出路径",
             description="打包后文件保存的位置（自动记录，下次打开无需重复设置）",
@@ -155,6 +172,10 @@ class BetterExperie_Preferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "preferences_panel_selection",text="Cross Select", expand=True)
         if self.preferences_panel_selection == 'SETTING':
+            row = layout.row()
+            row.prop(self, "show_slot_compare_header")
+            row = layout.row()
+            row.prop(self, "show_view3d_screenshot_button")
             if context.preferences.view.show_developer_ui:
                 row = layout.row()
                 row.prop(self, "show_debug",text="显示debug功能") #内部debug
