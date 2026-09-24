@@ -161,8 +161,14 @@ def _tag_redraw_all_3dviews():
 class BetterExperie_OT_PreviewVertexGroup(bpy.types.Operator):
     bl_idname = "better_experie.preview_vertex_group"
     bl_label = "快速预览"
-    bl_description = "在3D视图中高亮显示该顶点组的顶点（1秒渐隐）"
+    bl_description = "在3D视图中高亮显示该顶点组的顶点（1秒渐隐）；Ctrl+点击显示修改器堆栈后的顶点"
     bl_options = {'REGISTER'}
+
+    use_deformed: bpy.props.BoolProperty(default=False)
+
+    def invoke(self, context, event):
+        self.use_deformed = bool(event.ctrl)
+        return self.execute(context)
 
     def execute(self, context):
         obj = context.active_object
@@ -182,6 +188,11 @@ class BetterExperie_OT_PreviewVertexGroup(bpy.types.Operator):
             deform_layer = bm.verts.layers.deform.active
             if deform_layer:
                 coords = [matrix_world @ v.co.copy() for v in bm.verts if vg_index in v[deform_layer]]
+        elif self.use_deformed:
+            depsgraph = context.evaluated_depsgraph_get()
+            eval_obj = obj.evaluated_get(depsgraph)
+            world = eval_obj.matrix_world
+            coords = [world @ v.co for v in eval_obj.data.vertices if any(g.group == vg_index for g in v.groups)]
         else:
             coords = [matrix_world @ v.co.copy() for v in obj.data.vertices if any(g.group == vg_index for g in v.groups)]
 

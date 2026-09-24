@@ -4,6 +4,7 @@ import bpy
 import importlib
 
 MODULE_NAMES = [
+    "filebrowser_asset_exporter",
     "filebrowser_file_tools",
     "filebrowser_jump_to_active_folder",
     "filebrowser_jump_to_blender_folder",

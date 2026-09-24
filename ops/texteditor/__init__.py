@@ -5,7 +5,7 @@ import importlib
 
 MODULE_NAMES = [
     "texteditor_editing_tool",
-
+    "texteditor_selection_highlight",
 ]
 # 动态导入所有模块
 ops_module_list = [importlib.import_module(f".{name}", __package__) for name in MODULE_NAMES]

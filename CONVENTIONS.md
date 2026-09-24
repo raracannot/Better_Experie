@@ -700,6 +700,53 @@ def draw(context):
 
 ---
 
+## MT 菜单按钮无法 invoke：代理算子模式
+
+**MT（`bpy.types.Menu`）里的按钮无法有效执行 `invoke()`**——菜单项点击后直接走 `execute()`，因此依赖 `invoke()` 弹出 `invoke_props_dialog` / `invoke_confirm` / 启动模态的算子，从菜单触发时**不会弹出面板**。
+
+**解决**：注册一个**代理算子**（无业务逻辑），其 `execute()` 用 `'INVOKE_DEFAULT'` 重新调起真正的算子：
+
+```python
+# 真算子：带 invoke，弹设置面板
+class BetterExperie_OT_AssetMove(bpy.types.Operator):
+    bl_idname = "better_experie.asset_move"
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=520)
+    def execute(self, context):
+        ...
+
+# 代理算子：菜单只放它，点击后转发到真算子的 invoke
+class BetterExperie_OT_InvokeAssetMove(bpy.types.Operator):
+    bl_idname = "better_experie.invoke_asset_move"
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        return BetterExperie_OT_AssetMove.poll(context)  # 与真算子同条件，便于灰显
+
+    def execute(self, context):
+        try:
+            bpy.ops.better_experie.asset_move('INVOKE_DEFAULT')
+        except Exception as exc:
+            self.report({'ERROR'}, f"调起面板失败：{exc}")
+            return {'CANCELLED'}
+        return {'FINISHED'}
+```
+
+**要点**：
+
+- **仅在算子有 `invoke` 需求时才评估使用代理**：即算子依赖 `invoke()` 弹出 `invoke_props_dialog` / `invoke_confirm`，或靠 `invoke()` 启动模态。**只有 `execute()`、无需弹面板的普通按钮，直接从菜单（或右键菜单）直连真算子即可，不要套代理。**
+- 菜单（`*_MT_*`）**只放代理算子**，不放真算子。
+- 代理算子建议**复用真算子的 `poll`**，条件不满足时菜单项自动灰显。
+- 代理算子命名约定：`invoke_` 前缀（真算子 `xxx`，代理 `invoke_xxx`）。
+- 代理算子 `execute` 里的 `bpy.ops.<真算子>('INVOKE_DEFAULT')` **用 try 包裹**，失败时 `report` 而非抛异常。
+
+现有参考：
+- `ops/view3d/view3d_mesh_modal_weld.py:343-352` — `invoke_modal_weld` 包裹模态 `modal_weld`
+- `ops/filebrowser/filebrowser_asset_exporter.py` — `invoke_asset_move` / `invoke_asset_rename` / `invoke_asset_delete`
+
+---
+
 ## 面板注入（PT / HT）
 
 面板（`*_PT_*`）与标题栏（`*_HT_*`）注入**由各自 ops 模块自行在 `register()` 中管理**（不集中到 `blender_mt_custom.py`）。

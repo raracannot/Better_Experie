@@ -196,9 +196,12 @@ def _cleanup_edge_preview_on_load(dummy):
         bpy.app.timers.unregister(_edge_preview_fade_timer)
 
 
-def _collect_edge_group_preview_coords(context):
+def _collect_edge_group_preview_coords(context, use_deformed=False):
     """
     收集当前活动边组中 Weight > 0 的边线坐标。
+
+    参数：
+    - use_deformed：True 时读取修改器堆栈后的求值网格。
 
     返回：
     - NumPy float32 坐标数组，形状为 (edge_count * 2, 3)
@@ -224,6 +227,22 @@ def _collect_edge_group_preview_coords(context):
             if edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD:
                 coords.append(matrix_world @ edge.verts[0].co.copy())
                 coords.append(matrix_world @ edge.verts[1].co.copy())
+    elif use_deformed:
+        depsgraph = context.evaluated_depsgraph_get()
+        eval_obj = obj.evaluated_get(depsgraph)
+        eval_mesh = eval_obj.data
+        world = eval_obj.matrix_world
+        eval_attribute = eval_mesh.attributes.get(attribute.name)
+        if eval_attribute is None or not is_edge_group_attribute(eval_attribute):
+            return None
+
+        for edge in eval_mesh.edges:
+            if eval_attribute.data[edge.index].value > EDGE_GROUP_MEMBER_THRESHOLD:
+                vertex_a = eval_mesh.vertices[edge.vertices[0]]
+                vertex_b = eval_mesh.vertices[edge.vertices[1]]
+
+                coords.append(world @ vertex_a.co)
+                coords.append(world @ vertex_b.co)
     else:
         for edge in mesh.edges:
             edge_weight = attribute.data[edge.index].value
@@ -478,13 +497,19 @@ class BetterExperie_OT_EdgeGroupDeselect(bpy.types.Operator):
 # ------------------------------------------------------------------------
 class BetterExperie_OT_EdgeGroupPreview(bpy.types.Operator):
     bl_idname = "better_experie.edge_group_preview"
-    bl_description = "高亮显示当前边组的边线，并在短暂显示后渐隐"
+    bl_description = "高亮显示当前边组的边线，并在短暂显示后渐隐；Ctrl+点击显示修改器堆栈后的边线"
     bl_label = "预览边线"
     bl_options = {'REGISTER'}
+
+    use_deformed: bpy.props.BoolProperty(default=False)
 
     @classmethod
     def poll(cls, context):
         return get_active_mesh_object(context) is not None
+
+    def invoke(self, context, event):
+        self.use_deformed = bool(event.ctrl)
+        return self.execute(context)
 
     def execute(self, context):
         obj = get_active_mesh_object(context)
@@ -497,7 +522,7 @@ class BetterExperie_OT_EdgeGroupPreview(bpy.types.Operator):
             self.report({'WARNING'}, "请先创建或选择一个边组")
             return {'CANCELLED'}
 
-        coords = _collect_edge_group_preview_coords(context)
+        coords = _collect_edge_group_preview_coords(context, self.use_deformed)
         if coords is None or len(coords) == 0:
             self.report({'WARNING'},"没有可预览边：请确认边已分配 Weight，且 Weight 大于 0。",)
             return {'CANCELLED'}

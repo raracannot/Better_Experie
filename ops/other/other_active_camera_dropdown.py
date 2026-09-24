@@ -48,8 +48,13 @@ def _set_active_camera(self, value):
     if 0 <= value < len(camera_items):
         cam_name = camera_items[value][0]
         if cam_name != none_camera and cam_name in self.objects:
-            self.camera = self.objects[cam_name]
-
+            cam = self.objects[cam_name]
+            self.camera = cam
+            try:
+                bpy.context.view_layer.objects.active = cam
+            except Exception:
+                pass
+                
 
 def _draw_camera_dropdown(self, context):
     if context.region.alignment == 'RIGHT':
