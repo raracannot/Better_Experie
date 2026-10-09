@@ -6,6 +6,11 @@ import bpy
 # BACKUPS_FOLDER = abspath(join(ADDON_FOLDER, "src", "backups"))
 # BACKUPS_PREFERENCES_FILE = join(BACKUPS_FOLDER, "preferences")
 
+def get_addon_name():
+    from .. import __package__ as base_package
+    from .. import __name__ as base_name
+    return base_package or base_name
+    
 def get_pref():
     from .. import __package__ as base_package
     try:

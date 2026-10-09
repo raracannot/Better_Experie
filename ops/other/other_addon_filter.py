@@ -3,8 +3,9 @@
 import bpy
 import addon_utils
 
-_ADDON_MODULE = __name__.split('.')[0]
-
+# _ADDON_MODULE = __name__.split('.')[0]
+from ...utils import get_addon_name
+_ADDON_MODULE = get_addon_name()
 
 class BetterExperie_PropertyGroup_AddonFilterPreset(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="预设名称", default="新预设")
