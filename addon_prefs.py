@@ -86,6 +86,8 @@ def draw_thanks_panel(layout, context):
         ("olpha", "INTERNET", "https://olpha.cn/"), #关键功能代码片段
         ("睡梦", "BLENDER", "https://extensions.blender.org/author/3361/"), #开发知识援助
         ("浪里浇花", "HEART", "https://space.bilibili.com/382662799/"), #重要改进意见
+        ("wittyming", "HEART", "https://space.bilibili.com/263206115/"), #关键功能代码片段
+        ("61+", "HEART", "https://space.bilibili.com/3846664/"), #关键功能代码片段
     ]
     up_list.sort(key=lambda item: item[0])
     row = None

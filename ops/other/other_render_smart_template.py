@@ -640,7 +640,9 @@ class BETTER_EXPERIE_PT_smart_template(bpy.types.Panel):
         scene = context.scene
         settings = scene.better_experie_smart_template
 
-        layout.prop(settings,"enabled",text="启用智能模板表达式")
+        row = layout.row(align=True)
+        row.prop(settings, "enabled", text="启用智能模板表达式")
+        row.operator("better_experie.smart_template_apply", text="", icon="FILE_TICK")
 
         column = layout.column()
         column.enabled = settings.enabled
@@ -664,7 +666,9 @@ def draw_smart_template_node_properties(self, context):
     settings = node.better_experie_smart_template
 
     box = layout.box()
-    box.prop(settings, "enabled", text="启用智能模板表达式")
+    row = box.row(align=True)
+    row.prop(settings, "enabled", text="启用智能模板表达式")
+    row.operator("better_experie.smart_template_apply_node", text="", icon="FILE_TICK")
     if settings.enabled:
         column = box.column()
         column.enabled = settings.enabled
@@ -676,9 +680,92 @@ def draw_smart_template_node_properties(self, context):
         elif settings.preview_path:
             column.label(text=settings.preview_path)
 
+class BetterExperie_OT_SmartTemplateApply(bpy.types.Operator):
+    """手动应用场景智能模板表达式（无论是否启用）"""
+    bl_idname = "better_experie.smart_template_apply"
+    bl_label = "手动应用"
+    bl_description = "立即解析智能模板表达式并写入渲染输出路径（无需勾选「启用智能模板表达式」）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene is not None
+
+    def execute(self, context):
+        settings = context.scene.better_experie_smart_template
+        template = settings.expression.strip()
+        if not template:
+            settings.error = "智能模板表达式为空。"
+            settings.preview_path = ""
+            self.report({'ERROR'}, settings.error)
+            return {'CANCELLED'}
+        try:
+            path = parse_template(template, context.scene)
+        except BetterExperie_TemplateExpressionError as error:
+            settings.error = str(error)
+            settings.preview_path = ""
+            self.report({'ERROR'}, str(error))
+            return {'CANCELLED'}
+        settings.error = ""
+        settings.preview_path = path
+        context.scene.render.filepath = path
+        self.report({'INFO'}, f"已应用模板：{path}")
+        return {'FINISHED'}
+
+
+class BetterExperie_OT_SmartTemplateApplyNode(bpy.types.Operator):
+    """手动应用当前 File Output 节点的智能模板（无论是否启用）"""
+    bl_idname = "better_experie.smart_template_apply_node"
+    bl_label = "手动应用"
+    bl_description = "立即解析该 File Output 节点的智能模板并写入其目录与文件名（无需勾选「启用智能模板表达式」）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        node = getattr(context, "active_node", None)
+        return node is not None and node.bl_idname == "CompositorNodeOutputFile"
+
+    def execute(self, context):
+        node = getattr(context, "active_node", None)
+        if node is None or node.bl_idname != "CompositorNodeOutputFile":
+            self.report({'ERROR'}, "请先选中 File Output 节点")
+            return {'CANCELLED'}
+        settings = node.better_experie_smart_template
+        directory_expression = settings.directory_expression.strip()
+        file_name_expression = settings.directory_file_name.strip()
+        if not directory_expression:
+            settings.error = "路径智能模板表达式为空。"
+            settings.preview_path = ""
+            self.report({'ERROR'}, settings.error)
+            return {'CANCELLED'}
+        if not file_name_expression:
+            settings.error = "文件名智能模板表达式为空。"
+            settings.preview_path = ""
+            self.report({'ERROR'}, settings.error)
+            return {'CANCELLED'}
+        scene = get_node_owner_scene(node) or context.scene
+        try:
+            extra_variables = get_file_output_extra_variables(scene, node)
+            directory = parse_template(directory_expression, scene, extra_variables)
+            file_name = parse_template(file_name_expression, scene, extra_variables)
+        except BetterExperie_TemplateExpressionError as error:
+            settings.error = str(error)
+            settings.preview_path = ""
+            self.report({'ERROR'}, str(error))
+            return {'CANCELLED'}
+        settings.error = ""
+        settings.preview_path = os.path.join(directory, file_name)
+        set_file_output_node_directory(node, directory)
+        set_file_output_node_file_name(node, file_name)
+        self.report({'INFO'}, f"已应用节点模板：{settings.preview_path}")
+        return {'FINISHED'}
+
+
 classes = (
     BetterExperie_SmartTemplateSettings,
     BetterExperie_SmartTemplateFileOutputSettings,
+    BetterExperie_OT_SmartTemplateApply,
+    BetterExperie_OT_SmartTemplateApplyNode,
     BETTER_EXPERIE_PT_smart_template,
 )
 

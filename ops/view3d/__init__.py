@@ -55,6 +55,9 @@ MODULE_NAMES = [
     "view3d_mesh_edge_to_face",
     "view3d_mesh_intersect_edges",
     "view3d_mesh_weld_coplanar",
+    "view3d_mesh_custom_falloff",
+    "view3d_camera_flatten_view",
+    "view3d_camera_mirror_view",
 ]
 # 动态导入所有模块
 ops_module_list = [importlib.import_module(f".{name}", __package__) for name in MODULE_NAMES]

@@ -4,26 +4,15 @@ import bpy
 import bmesh
 import mathutils
 
+from ...utils.transform_orientation import slot_orientation
+
 _global_bbox_sign_cache = {}
 
+
 def get_orientation_matrix(context, obj):
-    orient_type = context.scene.transform_orientation_slots[0].type
-
-    if orient_type == 'GLOBAL':
-        return mathutils.Matrix.Identity(3)
-    elif orient_type == 'LOCAL':
-        return obj.matrix_world.to_3x3()
-    elif orient_type == 'CURSOR':
-        return context.scene.cursor.matrix.to_3x3()
-    elif orient_type == 'VIEW':
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                return area.spaces[0].region_3d.view_matrix.inverted().to_3x3()
-        return mathutils.Matrix.Identity(3)
-    elif orient_type == 'PARENT' and obj.parent:
-        return obj.parent.matrix_world.to_3x3()
-
-    return obj.matrix_world.to_3x3()
+    """当前变换朝向矩阵（统一走 utils.transform_orientation.slot_orientation）"""
+    view = getattr(getattr(context, "space_data", None), "region_3d", None)
+    return slot_orientation(context, obj=obj, view=view)
 
 
 def get_pivot_point(context, obj, bm, sel_verts, min_v, max_v):

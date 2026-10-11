@@ -123,6 +123,8 @@ def draw_view_cameras(self, context):
     layout.separator(type="LINE")
     layout.operator("better_experie.create_new_camera_at_view", icon="SCENE")
     layout.operator("better_experie.hitchcock_zoom", text="希区柯克变焦", icon="VIEW_CAMERA")
+    layout.operator("better_experie.flatten_view", text="平整视图", icon="ORIENTATION_GLOBAL")
+    layout.operator("better_experie.mirror_view", text="镜像视口", icon="MOD_MIRROR")
 
 
 # ── 物体镜像 ──
