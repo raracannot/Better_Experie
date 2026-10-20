@@ -78,30 +78,38 @@ def light_linking_mode(collection):
 
 
 def light_linking_remove_exclude_items(collection):
-    # 修复：按引用移除，避免 collection_objects 与 objects 的索引错位导致误删
     removed_count = 0
-
-    exclude_objects = [
-        item for item in light_linking_collection_objects(collection)
+    # 收集需要删除的索引（按 collection_objects 的顺序）
+    exclude_indices = [
+        i for i, item in enumerate(light_linking_collection_objects(collection))
         if item.light_linking.link_state == "EXCLUDE"
     ]
-    for obj in exclude_objects:
-        try:
-            collection.objects.unlink(obj)
-            removed_count += 1
-        except Exception as error:
-            print("[Light Linking] 移除排除对象失败：", obj.name, error)
+    # 从后往前删，避免删除后索引错位
+    real_objects = list(collection.objects)
+    for i in sorted(exclude_indices, reverse=True):
+        if i < len(real_objects):
+            obj = real_objects[i]
+            try:
+                collection.objects.unlink(obj)
+                removed_count += 1
+            except Exception as error:
+                print("[Light Linking] 移除排除对象失败：", obj.name, error)
 
-    exclude_children = [
-        item for item in light_linking_collection_children(collection)
+    # 子集合同理
+    exclude_child_indices = [
+        i for i, item in enumerate(light_linking_collection_children(collection))
         if item.light_linking.link_state == "EXCLUDE"
     ]
-    for child in exclude_children:
-        try:
-            collection.children.unlink(child)
-            removed_count += 1
-        except Exception as error:
-            print("[Light Linking] 移除排除集合失败：", child.name, error)
+
+    real_children = list(collection.children)
+    for i in sorted(exclude_child_indices, reverse=True):
+        if i < len(real_children):
+            child = real_children[i]
+            try:
+                collection.children.unlink(child)
+                removed_count += 1
+            except Exception as error:
+                print("[Light Linking] 移除排除集合失败：", child.name, error)
 
     return removed_count
 
