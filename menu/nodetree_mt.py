@@ -1,6 +1,7 @@
-﻿# NODE_MT_context_menu 节点编辑面板
+# NODE_MT_context_menu 节点编辑面板
 import bpy
 from ..utils.node_tree import get_image_from_selected_node, get_selected_ramp_nodes, get_selected_curve_nodes
+from ..ops.nodetree.nodetree_shader_light_preview import get_selected_area_lights
 
 def get_selected_texture_nodes(context):
     results = get_image_from_selected_node(context)
@@ -190,6 +191,24 @@ def draw_curve_submenu(self, context):
     self.layout.menu(BETTER_EXPERIE_MT_curve_submenu.bl_idname)
 
 
+def draw_shader_light_preview(self, context):
+    # 仅着色器编辑器、且所选物体包含区域光时显示。
+    area = getattr(context, "area", None)
+    if area is None or area.type != 'NODE_EDITOR':
+        return
+    space_data = getattr(context, "space_data", None)
+    if space_data is None or space_data.tree_type != 'ShaderNodeTree':
+        return
+    if not get_selected_area_lights(context):
+        return
+
+    layout = self.layout
+    layout.separator()
+    layout.operator("better_experie.temp_preview_area_light", text="预览", icon="RESTRICT_VIEW_OFF")
+    layout.operator("better_experie.build_area_light_preview", text="", icon="FILE_REFRESH")
+    layout.operator("better_experie.clear_area_light_preview", text="", icon="TRASH")
+
+
 # ═══════════════════════════════════════════════════════════
 # 注册
 # ═══════════════════════════════════════════════════════════
@@ -209,9 +228,11 @@ def register():
     bpy.types.NODE_MT_editor_menus.append(texture_tools_draw)
     bpy.types.NODE_MT_editor_menus.append(color_ramp_context_draw)
     bpy.types.NODE_MT_editor_menus.append(draw_curve_submenu)
+    bpy.types.NODE_MT_editor_menus.append(draw_shader_light_preview)
 
 
 def unregister():
+    bpy.types.NODE_MT_editor_menus.remove(draw_shader_light_preview)
     bpy.types.NODE_MT_editor_menus.remove(draw_curve_submenu)
     bpy.types.NODE_MT_editor_menus.remove(color_ramp_context_draw)
     bpy.types.NODE_MT_editor_menus.remove(texture_tools_draw)

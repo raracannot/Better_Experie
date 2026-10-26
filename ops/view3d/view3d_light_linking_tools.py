@@ -1,7 +1,7 @@
 # 灯光链接 / 阴影链接工具：向原生灯光数据面板与右键菜单注入批量操作
 
 import bpy
-from bpy.props import EnumProperty
+from bpy.props import BoolProperty, EnumProperty
 
 from ...utils.modal_border import add_modal_border, remove_modal_border
 
@@ -10,9 +10,51 @@ LINK_TYPES = [
     ("SHADOW", "Shadow Linking", "Operate on Shadow Linking"),
 ]
 
+# 吸管拾取“自动子级”开关（Scene 属性，随 .blend 保存）
+AUTO_CHILDREN_PROP = "better_experie_light_linking_auto_children"
+
 
 def light_linking_label(link_type):
     return "灯光链接" if link_type == "LIGHT" else "阴影链接"
+
+
+def light_linking_auto_children_enabled(context):
+    scene = getattr(context, "scene", None)
+    if scene is None:
+        return False
+    return bool(getattr(scene, AUTO_CHILDREN_PROP, False))
+
+
+def light_linking_expand_targets(obj, include_children):
+    """把拾取到的对象展开为“自身 + 递归子级”；关闭自动子级时只返回自身"""
+    if obj is None:
+        return []
+    targets = [obj]
+    if not include_children:
+        return targets
+    seen = {obj.name}
+    try:
+        for child in obj.children_recursive:
+            if child.name in seen:
+                continue
+            seen.add(child.name)
+            targets.append(child)
+    except Exception as error:
+        print("[Light Linking] 展开子级失败：", error)
+    return targets
+
+
+def light_linking_collect_targets(picked_objects, include_children):
+    """多个拾取对象合并展开，共用子级只出现一次（父级保持在前）"""
+    targets = []
+    seen = set()
+    for obj in picked_objects:
+        for target in light_linking_expand_targets(obj, include_children):
+            if target.name in seen:
+                continue
+            seen.add(target.name)
+            targets.append(target)
+    return targets
 
 
 def light_linking_get_collection(light_obj, link_type):
@@ -132,11 +174,15 @@ def light_linking_add_object(context, light_obj, obj, link_type):
     try:
         link_state = light_linking_mode(collection)
         collection.objects.link(obj)
-        # 修复：按引用定位新条目，避免依赖 collection_objects[-1] 的顺序假设
-        for item in light_linking_collection_objects(collection):
-            if item == obj:
-                item.light_linking.link_state = link_state
-                break
+        # CollectionObject 没有 object/name 引用，只能按 collection.objects 的索引对应定位新条目
+        object_names = [item.name for item in collection.objects]
+        try:
+            index = object_names.index(obj.name)
+        except ValueError:
+            index = -1
+        items = list(light_linking_collection_objects(collection))
+        if 0 <= index < len(items):
+            items[index].light_linking.link_state = link_state
         light_obj.update_tag()
         return True
     except Exception as error:
@@ -187,9 +233,10 @@ def light_linking_update_status(context, light_obj, link_type):
     collection = light_linking_get_collection(light_obj, link_type)
     mode = light_linking_mode(collection) if collection is not None else "INCLUDE"
     mode_text = "包含模式" if mode == "INCLUDE" else "排除模式"
+    auto_text = " | 自动子级：开" if light_linking_auto_children_enabled(context) else ""
     try:
         context.workspace.status_text_set(
-            f"{light_linking_label(link_type)}：{mode_text} | 点击添加 | Ctrl+点击移除 | Esc/右键：结束"
+            f"{light_linking_label(link_type)}：{mode_text}{auto_text} | 点击添加 | Ctrl+点击移除 | Esc/右键：结束"
         )
     except Exception:
         pass
@@ -401,6 +448,8 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
         self.light_name = context.object.name
         self.added_count = 0
         self.removed_count = 0
+        self.added_child_count = 0
+        self.removed_child_count = 0
         self.previous_selected_names = [obj.name for obj in context.selected_objects]
         self.previous_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else ""
 
@@ -428,10 +477,13 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
                 area, region = self.area_region_under_mouse(context, event)
                 if area is None or region is None:
                     return {"RUNNING_MODAL"}
+                if bpy.data.objects.get(self.light_name) is None:
+                    self.report({"WARNING"}, "灯光对象已不存在，吸管拾取结束")
+                    return self.finish(context)
                 if area.type == "VIEW_3D":
-                    self.pick_viewport(context, area, region, event, event.ctrl)
+                    self.pick_viewport(context, area, region, event)
                 elif area.type == "OUTLINER":
-                    self.pick_outliner(context, area, region, event.ctrl)
+                    self.pick_outliner(context, area, region, event)
                 return {"RUNNING_MODAL"}
 
             return {"PASS_THROUGH"}
@@ -452,77 +504,71 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
                     return area, region
         return None, None
 
-    def pick_viewport(self, context, area, region, event, remove=False):
-        light_obj = bpy.data.objects.get(self.light_name)
-        old_selected = [obj.name for obj in context.selected_objects]
-        old_active = context.view_layer.objects.active.name if context.view_layer.objects.active else ""
-        before = {obj.name for obj in context.selected_objects}
+    def pick_viewport(self, context, area, region, event):
         local_mouse = (event.mouse_x - region.x, event.mouse_y - region.y)
 
-        try:
-            with context.temp_override(window=context.window, area=area, region=region):
-                bpy.ops.view3d.select(extend=True, deselect=False, toggle=False, location=local_mouse, object=True)
+        def select_operator():
+            bpy.ops.view3d.select(extend=False, deselect=False, toggle=False, location=local_mouse, object=True)
 
-            after = {obj.name for obj in context.selected_objects}
-            hit_names = after - before
-            active_obj = context.view_layer.objects.active
+        self.pick_objects(context, area, region, event, select_operator)
 
-            if active_obj is not None:
-                hit_names.add(active_obj.name)
+    def pick_outliner(self, context, area, region, event):
+        def select_operator():
+            bpy.ops.outliner.item_activate("INVOKE_DEFAULT")
 
-            for name in hit_names:
-                target = bpy.data.objects.get(name)
-                if remove:
-                    if light_linking_remove_object(light_obj, target, self.link_type):
-                        self.removed_count += 1
-                else:
-                    if light_linking_add_object(context, light_obj, target, self.link_type):
-                        self.added_count += 1
+        self.pick_objects(context, area, region, event, select_operator)
 
-        except Exception as error:
-            print("[Light Linking] 视图拾取失败：", error)
-        finally:
-            light_linking_restore_selection(context, old_selected, old_active)
-            light_linking_update_status(context, context.object, self.link_type)
-            light_linking_tag_redraw(context)
-
-    def pick_outliner(self, context, area, region, remove=False):
+    def pick_objects(self, context, area, region, event, select_operator):
         light_obj = bpy.data.objects.get(self.light_name)
+        if light_obj is None:
+            return
+        # 编辑模式等非物体模式下无法可靠改写对象选择，直接忽略本次点击
+        if context.mode != "OBJECT":
+            return
         old_selected = [obj.name for obj in context.selected_objects]
         old_active = context.view_layer.objects.active.name if context.view_layer.objects.active else ""
-        before = {obj.name for obj in context.selected_objects}
-
+        picked = []
         try:
+            # 先清空选择：点空白处时结果为空，不会把上一次的激活对象误当成命中目标
+            light_linking_restore_selection(context, [], "")
             with context.temp_override(window=context.window, area=area, region=region):
-                bpy.ops.outliner.item_activate("INVOKE_DEFAULT")
-
-            after = {obj.name for obj in context.selected_objects}
-            hit_names = after - before
-            active_obj = context.view_layer.objects.active
-
-            if active_obj is not None:
-                hit_names.add(active_obj.name)
-
-            for name in hit_names:
-                target = bpy.data.objects.get(name)
-                if remove:
-                    if light_linking_remove_object(light_obj, target, self.link_type):
-                        self.removed_count += 1
-                else:
-                    if light_linking_add_object(context, light_obj, target, self.link_type):
-                        self.added_count += 1
-
+                select_operator()
+            picked = list(context.selected_objects)
         except Exception as error:
-            print("[Light Linking] Outliner 拾取失败：", error)
+            print("[Light Linking] 拾取失败：", error)
         finally:
             light_linking_restore_selection(context, old_selected, old_active)
-            light_linking_update_status(context, context.object, self.link_type)
-            light_linking_tag_redraw(context)
+
+        self.apply_picked(context, light_obj, picked, event.ctrl)
+        light_linking_update_status(context, light_obj, self.link_type)
+        light_linking_tag_redraw(context)
+
+    def apply_picked(self, context, light_obj, picked, remove):
+        if not picked:
+            return
+        include_children = light_linking_auto_children_enabled(context)
+        picked_names = {obj.name for obj in picked}
+
+        for target in light_linking_collect_targets(picked, include_children):
+            is_child = target.name not in picked_names
+            if remove:
+                if light_linking_remove_object(light_obj, target, self.link_type):
+                    self.removed_count += 1
+                    if is_child:
+                        self.removed_child_count += 1
+            elif light_linking_add_object(context, light_obj, target, self.link_type):
+                self.added_count += 1
+                if is_child:
+                    self.added_child_count += 1
 
     def finish(self, context):
+        auto_children = light_linking_auto_children_enabled(context)
         self.teardown(context)
         if self.added_count > 0 or self.removed_count > 0:
-            self.report({"INFO"}, f"已添加 {self.added_count} 个，移除 {self.removed_count} 个{light_linking_label(self.link_type)}对象")
+            text = f"已添加 {self.added_count} 个，移除 {self.removed_count} 个{light_linking_label(self.link_type)}对象"
+            if auto_children and (self.added_child_count or self.removed_child_count):
+                text += f"（其中子级：添加 {self.added_child_count} 个，移除 {self.removed_child_count} 个）"
+            self.report({"INFO"}, text)
             return {"FINISHED"}
         return {"CANCELLED"}
 
@@ -557,6 +603,8 @@ def _draw_light_linking_panel(layout, context, link_type):
             include_icon, exclude_icon = "BLANK1", "KEY_RING_FILLED"
 
     row = box.row(align=True)
+    row.use_property_decorate = False
+    
     op = row.operator("better_experie.light_linking_smart_convert_mode", text="切换为包含模式", icon=include_icon)
     op.link_type = link_type
     op.target_mode = "INCLUDE"
@@ -567,6 +615,9 @@ def _draw_light_linking_panel(layout, context, link_type):
     row.separator()
     op = row.operator("better_experie.light_linking_continuous_pick", text="吸管拾取", icon="EYEDROPPER")
     op.link_type = link_type
+    scene = getattr(context, "scene", None)
+    if scene is not None and hasattr(scene, AUTO_CHILDREN_PROP):
+        row.prop(scene, AUTO_CHILDREN_PROP, text="", icon="PARTICLES", toggle=True)
 
 
 def _draw_light_linking_context_menu(layout, link_type):
@@ -620,10 +671,25 @@ PANEL_TARGETS = [
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    # Scene 属性：随 .blend 保存，热重载时先清掉旧属性避免残留
+    try:
+        del bpy.types.Scene.better_experie_light_linking_auto_children
+    except (AttributeError, TypeError):
+        pass
+    bpy.types.Scene.better_experie_light_linking_auto_children = BoolProperty(
+        name="自动子级",
+        description="开启后，使用吸管拾取会连同对象的所有子级一起添加或移除",
+        default=False,
+    )
     for panel_name, draw_func in PANEL_TARGETS:
         panel_cls = getattr(bpy.types, panel_name, None)
         if panel_cls is None:
             continue
+        # 先摘再挂：热重载/重复 register 不会把同一个 draw 挂两遍
+        try:
+            panel_cls.remove(draw_func)
+        except Exception:
+            pass
         try:
             panel_cls.append(draw_func)
         except Exception:
@@ -639,5 +705,9 @@ def unregister():
             panel_cls.remove(draw_func)
         except Exception:
             pass
+    try:
+        del bpy.types.Scene.better_experie_light_linking_auto_children
+    except (AttributeError, TypeError):
+        pass
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

@@ -1,4 +1,4 @@
-﻿
+
 
 import bpy
 import importlib
@@ -19,6 +19,7 @@ MODULE_NAMES = [
     "nodetree_texture_tools",
     "nodetree_color_curve_tools",
     "nodetree_minimap_preview",
+    "nodetree_shader_light_preview",
 ]
 # 动态导入所有模块
 ops_module_list = [importlib.import_module(f".{name}", __package__) for name in MODULE_NAMES]
