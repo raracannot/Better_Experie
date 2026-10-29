@@ -1,4 +1,4 @@
-﻿
+
 
 import bpy
 import importlib
@@ -13,6 +13,7 @@ MODULE_NAMES = [
     "other_check_update",
     "other_deferred_transparent",
     "other_developer_panel_picker",
+    "other_gpu_cache_clean",
     "other_show_manual",
     "other_system_optimization",
     "nodetree_aov_rescan",

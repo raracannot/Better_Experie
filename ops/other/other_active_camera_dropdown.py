@@ -45,11 +45,10 @@ def _get_camera_items(self, context):
         for cam in cameras: # 仅渲染未禁用
             if not cam.hide_render:
                 filtered_cams.append(cam)
-
+    filtered_cams.sort(key=lambda cam: cam.name) # 相机按名称排序，应当先排序再构建
     for i, cam in enumerate(filtered_cams):
         cam_path = _get_object_path(cam)
         camera_items.append((cam.name, cam.name + "\u200b", cam_path, 'CAMERA_DATA', i))
-    camera_items.sort(key=lambda x: x[0]) #相机按名称排序
 
     if not camera_items:
         camera_items.append((none_camera, "无相机", "场景无相机对象", 'ERROR', 0))

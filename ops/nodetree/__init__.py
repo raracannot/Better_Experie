@@ -4,6 +4,7 @@ import bpy
 import importlib
 
 MODULE_NAMES = [
+    "nodetree_attribute_picker",
     "nodetree_compositor_add_output_node",
     "nodetree_compositor_bake_node",
     "nodetree_convert_image_to_gradient",

@@ -2,6 +2,10 @@
 import bpy
 from ..utils.node_tree import get_image_from_selected_node, get_selected_ramp_nodes, get_selected_curve_nodes
 from ..ops.nodetree.nodetree_shader_light_preview import get_selected_area_lights
+from ..ops.nodetree.nodetree_attribute_picker import (
+    get_active_attribute_node,
+    collect_attributes_by_type,
+)
 
 def get_selected_texture_nodes(context):
     results = get_image_from_selected_node(context)
@@ -164,6 +168,37 @@ class BETTER_EXPERIE_MT_curve_submenu(bpy.types.Menu):
 
 
 # ═══════════════════════════════════════════════════════════
+# 属性节点工具菜单
+# ═══════════════════════════════════════════════════════════
+
+class BETTER_EXPERIE_MT_attribute_picker(bpy.types.Menu):
+    bl_label = "属性节点工具"
+    bl_idname = "NODETREE_MT_attribute_picker"
+
+    @classmethod
+    def poll(cls, context):
+        return get_active_attribute_node(context) is not None
+
+    def draw(self, context):
+        layout = self.layout
+        node = get_active_attribute_node(context)
+        if node is None:
+            layout.label(text="未选中属性节点", icon='INFO')
+            return
+
+        names = collect_attributes_by_type(node.attribute_type, context)
+        if not names:
+            layout.label(text="无可用属性", icon='INFO')
+            return
+
+        node_name = node.name
+        for name in names:
+            op = layout.operator("better_experie.set_attribute_name", text=name)
+            op.attribute_name = name
+            op.node_name = node_name
+
+
+# ═══════════════════════════════════════════════════════════
 # 上下文菜单钩子
 # ═══════════════════════════════════════════════════════════
 
@@ -209,6 +244,13 @@ def draw_shader_light_preview(self, context):
     layout.operator("better_experie.clear_area_light_preview", text="", icon="TRASH")
 
 
+def draw_attribute_picker(self, context):
+    # 仅当活动节点是「属性」节点时出现，其余情况不占标题栏
+    if get_active_attribute_node(context) is None:
+        return
+    self.layout.menu(BETTER_EXPERIE_MT_attribute_picker.bl_idname)
+
+
 # ═══════════════════════════════════════════════════════════
 # 注册
 # ═══════════════════════════════════════════════════════════
@@ -218,6 +260,7 @@ classes = (
     BETTER_EXPERIE_MT_texture_tools,
     BETTER_EXPERIE_MT_color_ramp_tools,
     BETTER_EXPERIE_MT_curve_submenu,
+    BETTER_EXPERIE_MT_attribute_picker,
 )
 
 
@@ -229,9 +272,11 @@ def register():
     bpy.types.NODE_MT_editor_menus.append(color_ramp_context_draw)
     bpy.types.NODE_MT_editor_menus.append(draw_curve_submenu)
     bpy.types.NODE_MT_editor_menus.append(draw_shader_light_preview)
+    bpy.types.NODE_MT_editor_menus.append(draw_attribute_picker)
 
 
 def unregister():
+    bpy.types.NODE_MT_editor_menus.remove(draw_attribute_picker)
     bpy.types.NODE_MT_editor_menus.remove(draw_shader_light_preview)
     bpy.types.NODE_MT_editor_menus.remove(draw_curve_submenu)
     bpy.types.NODE_MT_editor_menus.remove(color_ramp_context_draw)

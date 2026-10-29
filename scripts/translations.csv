@@ -888,3 +888,42 @@ button_text,Operator 按钮文本,首字母大写,Capitalize First Letter,menu\t
 button_text,Operator 按钮文本,高级变换,Advanced Transform,menu\nodetree_mt.py:162; menu\nodetree_mt.py:162
 property_name,属性名,麦克风,Microphone,ops\other\other_addon_pack.py:227
 draw_label,Panel 标签,（当前未启用）,(currently disabled),utils\keymap_utils.py:74
+draw_label,Panel 标签,NVIDIA OptiX 缓存,NVIDIA OptiX Cache,ops\other\other_gpu_cache_clean.py:21
+draw_label,Panel 标签,NVIDIA CUDA 缓存,NVIDIA CUDA Cache,ops\other\other_gpu_cache_clean.py:22
+draw_label,Panel 标签,NVIDIA DX 缓存,NVIDIA DX Cache,ops\other\other_gpu_cache_clean.py:23
+draw_label,Panel 标签,NVIDIA GL 缓存,NVIDIA GL Cache,ops\other\other_gpu_cache_clean.py:24
+draw_label,Panel 标签,NVIDIA 着色器缓存 NV_Cache,NVIDIA Shader Cache NV_Cache,ops\other\other_gpu_cache_clean.py:25
+draw_label,Panel 标签,DirectX 着色器缓存,DirectX Shader Cache,ops\other\other_gpu_cache_clean.py:26
+draw_label,Panel 标签,AMD DX 缓存,AMD DX Cache,ops\other\other_gpu_cache_clean.py:27
+draw_label,Panel 标签,AMD DX9 缓存,AMD DX9 Cache,ops\other\other_gpu_cache_clean.py:28
+draw_label,Panel 标签,AMD DXC 缓存,AMD DXC Cache,ops\other\other_gpu_cache_clean.py:29
+draw_label,Panel 标签,AMD GL 缓存,AMD GL Cache,ops\other\other_gpu_cache_clean.py:30
+draw_label,Panel 标签,AMD Vulkan 缓存,AMD Vulkan Cache,ops\other\other_gpu_cache_clean.py:31
+draw_label,Panel 标签,AMD PIX 缓存,AMD PIX Cache,ops\other\other_gpu_cache_clean.py:32
+draw_label,Panel 标签,Intel 着色器缓存,Intel Shader Cache,ops\other\other_gpu_cache_clean.py:33
+draw_label,Panel 标签,NVIDIA Optix 缓存,NVIDIA Optix Cache,ops\other\other_gpu_cache_clean.py:42
+draw_label,Panel 标签,Mesa 着色器缓存,Mesa Shader Cache,ops\other\other_gpu_cache_clean.py:46
+draw_label,Panel 标签,Mesa 着色器缓存 DB,Mesa Shader Cache DB,ops\other\other_gpu_cache_clean.py:47
+draw_label,Panel 标签,NVIDIA 缓存,NVIDIA Cache,ops\other\other_gpu_cache_clean.py:55
+draw_label,Panel 标签,Metal 着色器缓存,Metal Shader Cache,ops\other\other_gpu_cache_clean.py:56
+button_text,Operator 按钮文本,清理GPU缓存,Clean GPU Cache,ops\other\other_gpu_cache_clean.py:2
+button_text,Operator 按钮文本,清理显卡着色器缓存（NVIDIA / AMD / Intel / DirectX）,Clean GPU shader caches (NVIDIA / AMD / Intel / DirectX),ops\other\other_gpu_cache_clean.py:149
+property_desc,属性描述,清理 NVIDIA / AMD / Intel 及 DirectX 的着色器缓存。这些缓存由驱动自动重建，清理后首次渲染/视口着色会稍慢，不影响文件数据,"Clean NVIDIA / AMD / Intel and DirectX shader caches. Drivers rebuild them automatically, so the first render or viewport shading afterwards may be slower; no file data is affected",ops\other\other_gpu_cache_clean.py
+draw_label,Panel 标签,检测到以下 GPU 着色器缓存，勾选后确定清理：,Detected GPU shader caches — tick the ones to clean:,ops\other\other_gpu_cache_clean.py:180
+draw_label,Panel 标签,未检测到缓存目录,No cache directory detected,ops\other\other_gpu_cache_clean.py:184
+draw_label,Panel 标签,缓存会被驱动自动重建，清理不会损坏工程文件,Caches are rebuilt by the driver automatically; cleaning never damages your project,ops\other\other_gpu_cache_clean.py:210
+draw_label,Panel 标签,若 Blender 正在使用这些缓存，建议清理后重启 Blender,"If Blender is using these caches, restart Blender after cleaning",ops\other\other_gpu_cache_clean.py:211
+report,报告消息,未找到可清理的 GPU 缓存目录,No cleanable GPU cache directory found,ops\other\other_gpu_cache_clean.py:173
+report,报告消息,未勾选任何缓存目录,No cache directory selected,ops\other\other_gpu_cache_clean.py:222
+property_name,属性名,路径,Path,ops\other\other_gpu_cache_clean.py:13
+property_name,属性名,清理,Clean,ops\other\other_gpu_cache_clean.py:1
+property_name,属性名,文件数,Files,ops\other\other_gpu_cache_clean.py:3
+property_name,属性名,大小,Size,ops\other\other_gpu_cache_clean.py:3
+button_text,Operator 按钮文本,属性节点工具,Attribute Node Tools,ops\nodetree\nodetree_attribute_picker.py:2
+draw_label,Panel 标签,未选中属性节点,No attribute node selected,ops\nodetree\nodetree_attribute_picker.py
+draw_label,Panel 标签,无可用属性,No available attribute,ops\nodetree\nodetree_attribute_picker.py
+button_text,Operator 按钮文本,设置属性名,Set Attribute Name,ops\nodetree\nodetree_attribute_picker.py:122
+button_text,Operator 按钮文本,将选中的属性名写入活动「属性」节点,Write the picked attribute name into the active Attribute node,ops\nodetree\nodetree_attribute_picker.py
+property_name,属性名,属性名,Attribute Name,ops\nodetree\nodetree_attribute_picker.py:3
+property_name,属性名,节点名,Node Name,ops\nodetree\nodetree_attribute_picker.py:127
+report,报告消息,没有活动属性节点,No active attribute node,ops\nodetree\nodetree_attribute_picker.py:143

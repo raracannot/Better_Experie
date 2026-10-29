@@ -220,6 +220,7 @@ def draw_topbar_file_cleanup(self, context):
     layout = self.layout
     layout.separator(type="LINE")
     layout.operator("better_experie.system_optimization", text="内存优化", icon="FILE_REFRESH")
+    layout.operator("better_experie.clean_gpu_cache", text="清理GPU缓存", icon="TRASH")
 
 
 # ── 注册 ──
