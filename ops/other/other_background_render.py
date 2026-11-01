@@ -147,8 +147,9 @@ def _execute_background_render(context, setting):
 
         return {'FINISHED'}
     except Exception as e:
+        msg = str(e)  
         context.window_manager.popup_menu(
-            lambda self, context: self.layout.label(text=str(e)),
+            lambda self, context: self.layout.label(text=msg),
             title="渲染错误",
             icon='ERROR'
         )

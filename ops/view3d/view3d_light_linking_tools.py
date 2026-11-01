@@ -588,6 +588,76 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
         self.teardown(context)
 
 
+
+
+class BetterExperie_OT_LightLinkingCopyToOther(bpy.types.Operator):
+    bl_idname = "better_experie.light_linking_copy_to_other"
+    bl_label = "复制链接到另一边"
+    bl_description = ("把所选物体的灯光链接复制到阴影链接（或反向）\n"
+                      "默认两边共用同一个集合；按住 Alt 点击则复制一份独立集合")
+    bl_options = {"REGISTER", "UNDO"}
+
+    direction: EnumProperty(
+        items=[
+            ("LIGHT_TO_SHADOW", "灯光 → 阴影", "把灯光链接复制给阴影链接"),
+            ("SHADOW_TO_LIGHT", "阴影 → 灯光", "把阴影链接复制给灯光链接"),
+        ],
+        default="LIGHT_TO_SHADOW",
+    )
+    make_copy: BoolProperty(
+        name="独立副本",
+        description="复制一份独立集合，而不是与源共用同一个集合",
+        default=False,
+    )
+
+    def invoke(self, context, event):
+        # 面板按钮走 INVOKE_DEFAULT，这里能拿到真实点击事件
+        # 默认（不按 Alt）= 共享；按住 Alt = 独立副本
+        if not self.properties.is_property_set("make_copy"):
+            self.make_copy = bool(getattr(event, "alt", False))
+        return self.execute(context)
+
+    def execute(self, context):
+        src_type = "LIGHT" if self.direction == "LIGHT_TO_SHADOW" else "SHADOW"
+        dst_type = "SHADOW" if self.direction == "LIGHT_TO_SHADOW" else "LIGHT"
+
+        targets = list(context.selected_objects) or ([context.object] if context.object else [])
+        if not targets:
+            self.report({"WARNING"}, "没有选中物体")
+            return {"CANCELLED"}
+
+        done = synced = empty = failed = 0
+        for obj in targets:
+            src = light_linking_get_collection(obj, src_type)
+            if src is None:
+                empty += 1
+                continue
+            dst = light_linking_get_collection(obj, dst_type)
+            if dst is src:
+                synced += 1
+                continue
+            try:
+                light_linking_set_collection(obj, dst_type, src.copy() if self.make_copy else src)
+                obj.update_tag()
+                done += 1
+            except Exception as error:
+                failed += 1
+                print("[Light Linking] 复制失败：", obj.name, error)
+
+        light_linking_tag_redraw(context)
+        mode_text = "独立副本" if self.make_copy else "共用同一集合"
+        msg = f"{light_linking_label(src_type)} → {light_linking_label(dst_type)}（{mode_text}）：{done} 个物体"
+        if synced:
+            msg += f"，{synced} 个已同步"
+        if empty:
+            msg += f"，{empty} 个无源集合已跳过"
+        if failed:
+            msg += f"，{failed} 个失败"
+        self.report({"WARNING"} if failed else {"INFO"}, msg)
+        return {"FINISHED"}
+        
+        
+        
 def _draw_light_linking_panel(layout, context, link_type):
     box = layout.box()
 
@@ -604,6 +674,12 @@ def _draw_light_linking_panel(layout, context, link_type):
 
     row = box.row(align=True)
     row.use_property_decorate = False
+    
+    op = row.operator(
+        "better_experie.light_linking_copy_to_other",
+        text="" if link_type == "LIGHT" else "",
+        icon="SORT_ASC" if link_type == "LIGHT" else "SORT_DESC",
+    )
     
     op = row.operator("better_experie.light_linking_smart_convert_mode", text="切换为包含模式", icon=include_icon)
     op.link_type = link_type
@@ -657,6 +733,7 @@ classes = (
     BetterExperie_OT_LightLinkingChangeAllState,
     BetterExperie_OT_LightLinkingContinuousPick,
     BetterExperie_OT_LightLinkingSmartConvertMode,
+    BetterExperie_OT_LightLinkingCopyToOther, 
 )
 
 # 核心面板（4.5+ 恒存在），注入/注销均做防御处理

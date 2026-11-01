@@ -165,12 +165,6 @@ class BetterExperie_OT_MeshFilterBatchSelector(bpy.types.Operator):
     freestyle_set: set = None
     
     def invoke(self, context, event):
-        config = context.scene.better_experie_mesh_filter_prop
-        if len(config.filter_cards) == 0:
-            config.filter_cards.add()
-        return context.window_manager.invoke_props_dialog(self, width=520)
-
-    def invoke(self, context, event):
         # 先检查是否处于网格编辑模式
         obj = context.active_object
         if not obj or obj.type != 'MESH' or context.mode != 'EDIT_MESH':

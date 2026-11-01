@@ -10,6 +10,7 @@ from mathutils import Vector
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
+import bpy.utils.previews
 from ...utils.node_tree import stick_selected_node_to_cursor
 
 # 路径计算：ops/nodetree/ → ops/ → addon root → data/
