@@ -45,7 +45,7 @@ class BETTER_EXPERIE_MT_nodetree_submenu(bpy.types.Menu):
             layout.menu(BETTER_EXPERIE_MT_curve_submenu.bl_idname)
 
         if context.space_data.tree_type == 'CompositorNodeTree':
-            if context.scene.compositing_node_group is not None and context.active_node is not None:
+            if context.space_data.edit_tree is not None and context.active_node is not None:
                 layout.separator(type="LINE")
                 layout.operator("better_experie.compositor_add_file_output", text="快速生成输出节点", icon="OUTPUT")
                 op_bake = layout.operator("better_experie.compositor_bake_node", text="快速烘焙活动节点", icon='MEMORY')

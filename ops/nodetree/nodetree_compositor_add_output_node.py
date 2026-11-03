@@ -2,6 +2,18 @@
 
 import bpy
 
+
+def _editing_tree(context):
+    """优先用节点编辑器正在编辑的树；5.3 的 Effects Stack 下每条 effect 各有一棵。"""
+    space = getattr(context, "space_data", None)
+    tree = getattr(space, "edit_tree", None) if space else None
+    if tree is not None:
+        return tree
+    with __import__("warnings").catch_warnings():
+        __import__("warnings").simplefilter("ignore")
+        return getattr(context.scene, "compositing_node_group", None)
+
+
 class BetterExperie_OT_CompositorAddFileOutput(bpy.types.Operator):
     bl_idname = "better_experie.compositor_add_file_output"
     bl_label = "一键文件输出"
@@ -12,11 +24,11 @@ class BetterExperie_OT_CompositorAddFileOutput(bpy.types.Operator):
         space = context.space_data
         return (space.type == 'NODE_EDITOR' and
                 space.tree_type == 'CompositorNodeTree' and
-                context.scene.compositing_node_group is not None and
+                _editing_tree(context) is not None and
                 context.active_node is not None)
 
     def execute(self, context):
-        ntree = context.scene.compositing_node_group
+        ntree = _editing_tree(context)
         # 只取第一个被选中的节点作为目标
         selected_nodes = [n for n in ntree.nodes if n.select]
         if not selected_nodes:

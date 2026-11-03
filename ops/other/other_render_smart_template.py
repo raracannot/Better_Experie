@@ -3,6 +3,7 @@
 import bpy
 import os
 import re
+import warnings
 import getpass
 import platform
 from datetime import datetime
@@ -113,20 +114,44 @@ def is_blender_5_or_later():
     """判断当前 Blender 是否为 5.0 或更高版本。"""
     return bpy.app.version >= (5, 0, 0)
 
+def get_compositor_node_trees(scene):
+    """
+    获取场景里所有合成器节点树。
+
+    Blender 4.x：scene.use_nodes / scene.node_tree（只有一棵）
+    Blender 5.0~5.2：scene.compositing_node_group（只有一棵）
+    Blender 5.3+：合成器改成 Effects Stack，每层 effect 各自一棵节点组；
+        scene.compositing_node_group 仍可读写（指向当前激活的那棵），
+        但已标记弃用（预计 6.0 移除），多效果时也只覆盖激活的那一棵。
+    """
+    trees = []
+
+    if not is_blender_5_or_later():
+        if scene.use_nodes and scene.node_tree:
+            trees.append(scene.node_tree)
+        return trees
+
+    for effect in getattr(scene, "compositor_effects", ()) or ():
+        group = getattr(effect, "node_group", None)
+        if group is not None and group not in trees:
+            trees.append(group)
+
+    # 旧接口兜底（5.3 会发 DeprecationWarning，这里静音掉，避免刷控制台）
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            legacy = scene.compositing_node_group
+        except Exception:
+            legacy = None
+    if legacy is not None and legacy not in trees:
+        trees.append(legacy)
+    return trees
+
+
 def get_compositor_node_tree(scene):
-    """
-    获取场景使用的合成器节点树。
-    Blender 4.x：
-        scene.use_nodes
-        scene.node_tree
-    Blender 5.0+：
-        scene.compositing_node_group
-    """
-    if is_blender_5_or_later():
-        return scene.compositing_node_group
-    if not scene.use_nodes:
-        return None
-    return scene.node_tree
+    """取第一棵合成节点树（老的调用点保持兼容）。"""
+    trees = get_compositor_node_trees(scene)
+    return trees[0] if trees else None
 
 def get_file_output_node_directory(node):
     """
@@ -172,7 +197,7 @@ def get_node_owner_scene(node):
     """
     node_tree = node.id_data
     for scene in bpy.data.scenes:
-        if get_compositor_node_tree(scene) == node_tree:
+        if node_tree in get_compositor_node_trees(scene):
             return scene
     return None
 
@@ -535,13 +560,11 @@ class BetterExperie_SmartTemplateFileOutputSettings(bpy.types.PropertyGroup):
     preview_path: bpy.props.StringProperty(name="解析后的路径", default="", options={"HIDDEN"})
 
 def update_all_file_output_template_previews(scene):
-    """刷新当前场景中所有 File Output 节点的模板预览。"""
-    node_tree = get_compositor_node_tree(scene)
-    if not node_tree:
-        return
-    for node in node_tree.nodes:
-        if node.bl_idname == "CompositorNodeOutputFile":
-            update_file_output_template_preview(scene, node)
+    """刷新当前场景中所有合成节点树里的 File Output 模板预览。"""
+    for node_tree in get_compositor_node_trees(scene):
+        for node in node_tree.nodes:
+            if node.bl_idname == "CompositorNodeOutputFile":
+                update_file_output_template_preview(scene, node)
 
 def apply_file_output_templates(scene):
     """
@@ -552,37 +575,41 @@ def apply_file_output_templates(scene):
     Blender 5.0+：
     - node.directory：目录
     - node.file_name：文件名
+    Blender 5.3+：Effects Stack 下每个 effect 各有一棵节点树，这里全部遍历。
     """
-    node_tree = get_compositor_node_tree(scene)
-    if not node_tree:
+    node_trees = get_compositor_node_trees(scene)
+    if not node_trees:
         return
-    for node in node_tree.nodes:
-        if node.bl_idname != "CompositorNodeOutputFile":
-            continue
 
-        settings = node.better_experie_smart_template
-        if not settings.enabled:
-            continue
+    for node_tree in node_trees:
+        for node in node_tree.nodes:
+            if node.bl_idname != "CompositorNodeOutputFile":
+                continue
 
-        update_file_output_template_preview(scene, node)
-        if settings.error:
-            print(f"[智能模板表达式] File Output 节点“{node.name}”模板解析失败：{settings.error}")
-            continue
+            settings = node.better_experie_smart_template
+            if not settings.enabled:
+                continue
 
-        try:
-            extra_variables = get_file_output_extra_variables(scene,node)
+            update_file_output_template_preview(scene, node)
+            if settings.error:
+                print(f"[智能模板表达式] File Output 节点“{node.name}”模板解析失败：{settings.error}")
+                continue
 
-            directory = parse_template(settings.directory_expression.strip(),scene,extra_variables,)
-            file_name = parse_template(settings.directory_file_name.strip(),scene,extra_variables,)
+            try:
+                extra_variables = get_file_output_extra_variables(scene,node)
 
-            set_file_output_node_directory(node, directory)
-            set_file_output_node_file_name(node, file_name)
+                directory = parse_template(settings.directory_expression.strip(),scene,extra_variables,)
+                file_name = parse_template(settings.directory_file_name.strip(),scene,extra_variables,)
 
-        except BetterExperie_TemplateExpressionError as error:
-            settings.error = str(error)
-            settings.preview_path = ""
+                set_file_output_node_directory(node, directory)
+                set_file_output_node_file_name(node, file_name)
 
-            print(f"[智能模板表达式] File Output 节点“{node.name}”模板解析失败：{settings.error}")
+            except BetterExperie_TemplateExpressionError as error:
+                settings.error = str(error)
+                settings.preview_path = ""
+
+                print(f"[智能模板表达式] File Output 节点“{node.name}”模板解析失败：{settings.error}")
+
 
 @persistent
 def smart_template_render_pre(scene):
@@ -646,7 +673,10 @@ class BETTER_EXPERIE_PT_smart_template(bpy.types.Panel):
 
         column = layout.column()
         column.enabled = settings.enabled
-        column.prop(settings, "expression", text="智能模板表达式")
+        row = column.row(align=True)
+        row.prop(settings, "expression", text="智能模板表达式")
+        op = row.operator("better_experie.smart_template_token", text="", icon="WINDOW")
+        op.target = 'SCENE'
         column.prop(settings, "batch", text="渲染编号")
 
         if settings.enabled:
@@ -672,8 +702,14 @@ def draw_smart_template_node_properties(self, context):
     if settings.enabled:
         column = box.column()
         column.enabled = settings.enabled
-        column.prop(settings, "directory_expression", text="路径智能模板表达式")
-        column.prop(settings, "directory_file_name", text="文件名智能模板表达式")
+        row = column.row(align=True)
+        row.prop(settings, "directory_expression", text="路径智能模板表达式")
+        op = row.operator("better_experie.smart_template_token", text="", icon="WINDOW")
+        op.target = 'NODE_DIRECTORY'
+        row = column.row(align=True)
+        row.prop(settings, "directory_file_name", text="文件名智能模板表达式")
+        op = row.operator("better_experie.smart_template_token", text="", icon="WINDOW")
+        op.target = 'NODE_FILE_NAME'
         if settings.error:
             column.alert = True
             column.label(text=settings.error, icon="ERROR")

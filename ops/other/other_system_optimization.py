@@ -89,11 +89,27 @@ class BetterExperie_OT_SystemOptimization(bpy.types.Operator):
         bpy.ops.ptcache.free_bake_all()
 
         # 清理未使用的材质槽
+        # 注意：obj.material_slots 是只读的 bpy_prop_collection，没有 remove()。
+        # 网格的槽位来自 mesh.materials，要从那里按索引 pop 才会真正删掉槽。
         for obj in bpy.data.objects:
-            if obj.type == 'MESH' and obj.material_slots:
-                for i in range(len(obj.material_slots) - 1, -1, -1):
-                    if obj.material_slots[i].material is None:
-                        obj.material_slots.remove(obj.material_slots[i])
+            if obj.type != 'MESH' or not obj.material_slots:
+                continue
+            materials = getattr(obj.data, "materials", None)
+            if materials is None:
+                continue
+            for i in range(len(obj.material_slots) - 1, -1, -1):
+                slot = obj.material_slots[i]
+                if slot.material is not None:
+                    continue
+                # 对象级链接（link='OBJECT'）的槽位不在 mesh.materials 里，跳过
+                if getattr(slot, "link", "DATA") != "DATA":
+                    continue
+                if i >= len(materials):
+                    continue
+                try:
+                    materials.pop(index=i)
+                except Exception:
+                    continue
 
         # 清理未使用数据（多次调用以确保彻底清理）
         for i in range(5):

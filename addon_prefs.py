@@ -3,6 +3,16 @@ import bpy
 from . import __package__ as base_package
 from .utils.keymap_utils import draw_hotkey_panel
 
+
+def _force_update_ui():
+    """懒加载强制更新模块，返回按钮文案与状态行（模块未就绪时返回 None）。"""
+    try:
+        from .ops.other import other_force_update
+        return other_force_update.get_ui_state()
+    except Exception:
+        return None
+
+
 def draw_description_panel(layout, context):
     box=layout.box()
     col = box.column(align=True)
@@ -31,7 +41,15 @@ def draw_description_panel(layout, context):
     row.operator("wm.url_open", text="功能介绍", icon="HELP").url = "https://space.bilibili.com/27284213"#待发布后补充
     # row.operator("wm.url_open", text="更新链接", icon="FILE_REFRESH").url = "https://pan.baidu.com/s/1aOYSzA_FobChbegOAWHACg?pwd=RARA"
     row.operator("better_experie.check_update", text="检查更新", icon="FILE_REFRESH")
-    
+
+    # 强制更新：下载 GitHub 发布包并完整覆盖当前插件目录
+    force_ui = _force_update_ui() or {}
+    row.operator("better_experie.force_update",
+                 text=force_ui.get("label", "强制更新"),
+                 icon=force_ui.get("icon", "IMPORT"))
+    if force_ui.get("status"):
+        col.label(text=force_ui["status"], icon="INFO")
+
     row.separator()
     row.operator("wm.url_open", text="哔哩哔哩", icon="USER").url = "https://space.bilibili.com/27284213"
     row.operator("wm.url_open", text="官方库", icon="BLENDER").url = "https://extensions.blender.org/author/58486/"

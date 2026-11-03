@@ -258,7 +258,11 @@ class BetterExperie_OT_RampLibApply(bpy.types.Operator):
             bpy.ops.node.select(deselect_all=True)
             tree_type = context.space_data.tree_type
             if tree_type == 'CompositorNodeTree':
-                node_idname = 'CompositorNodeValToRGB'
+                # Blender 5.0 起合成器复用 ShaderNodeValToRGB，旧的 CompositorNodeValToRGB 已移除
+                if bpy.app.version >= (5, 0, 0):
+                    node_idname = 'ShaderNodeValToRGB'
+                else:
+                    node_idname = 'CompositorNodeValToRGB'
             elif tree_type == 'TextureNodeTree':
                 node_idname = 'TextureNodeValToRGB'
             else:
