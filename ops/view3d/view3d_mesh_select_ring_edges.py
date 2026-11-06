@@ -9,6 +9,13 @@ from mathutils.bvhtree import BVHTree
 from bpy_extras import view3d_utils
 from gpu_extras.batch import batch_for_shader
 from ...utils.modal_border import add_modal_border, remove_modal_border
+from ...utils.select_direction import (
+    DIR_RULE_DEFAULT,
+    DIR_RULE_ITEMS,
+    rank_by_reference,
+    reference_vector,
+    rule_label,
+)
 
 
 def _dist_to_edge(point, edge_v1, edge_v2):
@@ -43,9 +50,36 @@ def _get_opposite_edge_geometric(face, edge, parallel_factor=0.5):
     return best_edge if max_alignment >= parallel_factor else None
 
 
+def _side_direction(face, edge):
+    """从 edge 中点指向该面「对边」中点的方向（局部空间，已归一化）。
+
+    不用 edge_vec × face.normal 来算：边顶点的存储顺序和面环绕方向无关，
+    叉积的符号可能是反的。
+    """
+    opposite = _get_opposite_edge_geometric(face, edge, 0.0)
+    if opposite is None:
+        return None
+    mid = (edge.verts[0].co + edge.verts[1].co) * 0.5
+    opp_mid = (opposite.verts[0].co + opposite.verts[1].co) * 0.5
+    delta = opp_mid - mid
+    return delta.normalized() if delta.length > 1e-9 else None
+
+
+def _order_sides(start_edge, ref_local):
+    """按与参考方向的贴合度给 start_edge 的相邻面排序；ref 为 None 时保持存储顺序。
+
+    返回的第一个面就是「A 侧」。
+    """
+    return rank_by_reference(
+        start_edge.link_faces,
+        lambda face: _side_direction(face, start_edge),
+        ref_local,
+    )
+
+
 def _expand_ring_from_edge(bm, start_edge, steps, parallel_factor=0.5,
                            max_angle=math.radians(90), stop_at_sharp=False,
-                           trace_dir='BOTH'):
+                           trace_dir='BOTH', ref_local=None):
     result = {start_edge}
     limit = abs(steps)
     # 单边模式下负数为反向延伸
@@ -86,11 +120,14 @@ def _expand_ring_from_edge(bm, start_edge, steps, parallel_factor=0.5,
                     edge_stack.append(nxt)
             steps_taken += 1
 
-    start_faces = list(start_edge.link_faces)
-    if eff_dir in {'BOTH', 'DIR_A'} and len(start_faces) > 0:
-        _expand_chain(start_faces[0], start_edge)
-    if eff_dir in {'BOTH', 'DIR_B'} and len(start_faces) > 1:
-        _expand_chain(start_faces[1], start_edge)
+    # 按参考方向给两侧排序：A 侧 = 与参考方向最贴合的那一面，
+    # B 侧 = 其余所有面（非流形边挂 3 个以上面时，不再漏掉第 3 个及以后）
+    sides = _order_sides(start_edge, ref_local)
+    if eff_dir in {'BOTH', 'DIR_A'} and sides:
+        _expand_chain(sides[0], start_edge)
+    if eff_dir in {'BOTH', 'DIR_B'}:
+        for side_face in sides[1:]:
+            _expand_chain(side_face, start_edge)
     return result
 
 
@@ -107,6 +144,10 @@ class BetterExperie_EdgeRingSettings(bpy.types.PropertyGroup):
             ('DIR_A', "方向 A", ""),
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
+    dir_rule: bpy.props.EnumProperty(
+        name="方向定义",
+        description="决定「方向 A」走向边的哪一侧；屏幕方向会随视角变化，世界轴跨会话稳定",
+        items=DIR_RULE_ITEMS, default=DIR_RULE_DEFAULT)
     steps: bpy.props.IntProperty(
         name="扩选次数", description="向两端扩选的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
         default=0, min=-10000, max=10000)
@@ -144,6 +185,10 @@ class BetterExperie_OT_SelectEdgeRingGeo(bpy.types.Operator):
             ('DIR_A', "方向 A", ""),
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
+    dir_rule: bpy.props.EnumProperty(
+        name="方向定义",
+        description="决定「方向 A」走向边的哪一侧；屏幕方向会随视角变化，世界轴跨会话稳定",
+        items=DIR_RULE_ITEMS, default=DIR_RULE_DEFAULT)
     steps: bpy.props.IntProperty(
         name="扩选次数", description="向两端扩选的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
         default=0, min=-10000, max=10000)
@@ -159,6 +204,7 @@ class BetterExperie_OT_SelectEdgeRingGeo(bpy.types.Operator):
         layout = self.layout
         col = layout.column(align=True)
         col.prop(self, "trace_dir", expand=True)
+        col.prop(self, "dir_rule")
         col.prop(self, "steps")
         col.separator()
         col.prop(self, "max_angle", slider=True)
@@ -177,11 +223,12 @@ class BetterExperie_OT_SelectEdgeRingGeo(bpy.types.Operator):
             self.report({'WARNING'}, "请先选择至少一条边")
             return {'CANCELLED'}
 
+        ref_local = reference_vector(context, obj, self.dir_rule)
         chain = set()
         for e in start_edges:
             chain.update(_expand_ring_from_edge(
                 bm, e, self.steps, self.parallel_factor,
-                self.max_angle, self.stop_at_sharp, self.trace_dir))
+                self.max_angle, self.stop_at_sharp, self.trace_dir, ref_local))
 
         for e in chain:
             e.select = True
@@ -244,6 +291,10 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
             ('DIR_A', "方向 A", ""),
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
+    dir_rule: bpy.props.EnumProperty(
+        name="方向定义",
+        description="决定「方向 A」走向边的哪一侧；屏幕方向会随视角变化，世界轴跨会话稳定",
+        items=DIR_RULE_ITEMS, default=DIR_RULE_DEFAULT)
     steps: bpy.props.IntProperty(
         name="扩选次数", description="向两端扩选的段数（绝对值），0为不设限，单边模式下负数为反向延伸",
         default=0, min=-10000, max=10000)
@@ -271,6 +322,7 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
         layout = self.layout
         col = layout.column(align=True)
         col.prop(s, "trace_dir", expand=True)
+        col.prop(s, "dir_rule")
         col.prop(s, "steps")
         col.separator()
         col.prop(s, "max_angle", slider=True)
@@ -309,9 +361,10 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
         else:
             dir_name = base_dir
         steps_text = '不限' if s.steps == 0 else str(s.steps)
+        rule_name = rule_label(s.dir_rule)
         text = (
             f"悬浮预览并排边环 | 步数:{steps_text}(Shift滚轮) | "
-            f"方向:{dir_name}(Tab) | S设置 | 左键确定 | Shift加选 Ctrl减选 | 右键取消"
+            f"方向:{dir_name}/{rule_name}(Tab) | S设置 | 左键确定 | Shift加选 Ctrl减选 | 右键取消"
         )
         try:
             context.workspace.status_text_set(text)
@@ -389,9 +442,10 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
         bm.faces.ensure_lookup_table()
 
         target_edge = bm.edges[self.target_edge_idx]
+        ref_local = reference_vector(context, obj, s.dir_rule)
         chain = _expand_ring_from_edge(
             bm, target_edge, s.steps, s.parallel_factor,
-            s.max_angle, s.stop_at_sharp, s.trace_dir)
+            s.max_angle, s.stop_at_sharp, s.trace_dir, ref_local)
 
         if self.select_mode == 'SET':
             bpy.ops.mesh.select_all(action='DESELECT')
@@ -447,9 +501,10 @@ class BetterExperie_OT_SelectEdgeRingInteractive(bpy.types.Operator):
                     best_e = e
             if best_e:
                 self.target_edge_idx = best_e.index
+                ref_local = reference_vector(context, obj, s.dir_rule)
                 chain = _expand_ring_from_edge(
                     bm, best_e, s.steps, s.parallel_factor,
-                    s.max_angle, s.stop_at_sharp, s.trace_dir)
+                    s.max_angle, s.stop_at_sharp, s.trace_dir, ref_local)
                 self.preview_coords = [(e.verts[0].co.copy(), e.verts[1].co.copy()) for e in chain]
             else:
                 self.preview_coords = []
@@ -491,6 +546,7 @@ class BetterExperie_OT_EdgeRingSettings(bpy.types.Operator):
         layout = self.layout
         col = layout.column(align=True)
         col.prop(s, "trace_dir", expand=True)
+        col.prop(s, "dir_rule")
         col.prop(s, "steps")
         col.separator()
         col.prop(s, "max_angle", slider=True)

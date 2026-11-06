@@ -137,7 +137,7 @@ class BetterExperie_OT_ViewportSnapshot(bpy.types.Operator):
             return {'CANCELLED'}
 
         context.window_manager.modal_handler_add(self)
-        self.jump_to_view_tab(context)
+        # self.jump_to_view_tab(context) #体验不佳，暂时屏蔽
         context.area.tag_redraw()
         return {'RUNNING_MODAL'}
 

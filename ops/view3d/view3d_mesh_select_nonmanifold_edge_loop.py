@@ -10,6 +10,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 from bpy_extras import view3d_utils
 from ...utils.modal_border import add_modal_border, remove_modal_border
+from ...utils.select_direction import reference_vector
 
 
 def _is_vertex_sharp(vertex):
@@ -51,11 +52,24 @@ def _find_next_step(current_edge, vertex, max_angle_rad, jump_dist, visited_vert
     return candidates[0][3], candidates[0][4]
 
 
-def _trace_path(start_edge, max_angle, jump_dist, stop_at_sharp, steps, direction_mode):
+def _a_end(edge, ref_local):
+    """挑出「A 端」：外指方向与参考方向同侧；ref 为 None 时退回存储顺序。"""
+    v0, v1 = edge.verts[0], edge.verts[1]
+    if ref_local is None:
+        return v0
+    dot = (v0.co - v1.co).dot(ref_local)
+    if abs(dot) < 1e-9:       # 边几乎垂直于参考方向，两侧等价，退回存储顺序
+        return v0
+    return v0 if dot > 0.0 else v1
+
+
+def _trace_path(start_edge, max_angle, jump_dist, stop_at_sharp, steps,
+                direction_mode, a_end=None):
     final_edges = {start_edge}
     visited_verts = {v for v in start_edge.verts}
-    verts = list(start_edge.verts)
-    v_a, v_b = verts[0], verts[1]
+    # A/B 端可由 _a_end() 按参考方向指定；缺省退回 bmesh 存储顺序（旧行为）
+    v_a = a_end if a_end is not None else start_edge.verts[0]
+    v_b = start_edge.other_vert(v_a)
     limit = abs(steps)
 
     tasks = []
@@ -107,6 +121,17 @@ class BetterExperie_NonManifoldEdgeLoopSettings(bpy.types.PropertyGroup):
             ('DIR_A', "方向 A", ""),
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
+    dir_rule: bpy.props.EnumProperty(
+        name="方向定义",
+        description="决定「方向 A」指向哪一端；屏幕方向会随视角变化，世界轴跨会话稳定",
+        items=[
+            ('SCREEN_LEFT', "屏幕左", "A 端 = 朝屏幕左边延伸的那一端（转视角会变）"),
+            ('SCREEN_UP', "屏幕上", "A 端 = 朝屏幕上方延伸的那一端（转视角会变）"),
+            ('WORLD_X', "世界 +X", "A 端 = 朝世界 +X 的那一端（稳定、可复现）"),
+            ('WORLD_Y', "世界 +Y", "A 端 = 朝世界 +Y 的那一端（稳定、可复现）"),
+            ('WORLD_Z', "世界 +Z", "A 端 = 朝世界 +Z 的那一端（稳定、可复现）"),
+            ('STORAGE', "存储顺序", "旧行为：A = 这条边的第 0 个顶点"),
+        ], default='SCREEN_LEFT')
     stop_at_sharp: bpy.props.BoolProperty(
         name="锐点处停止", description="如果顶点连接了锐边，则停止追踪", default=True)
 
@@ -144,6 +169,17 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoopBatch(bpy.types.Operator):
             ('DIR_A', "方向 A", ""),
             ('DIR_B', "方向 B", ""),
         ], default='BOTH')
+    dir_rule: bpy.props.EnumProperty(
+        name="方向定义",
+        description="决定「方向 A」指向哪一端；屏幕方向会随视角变化，世界轴跨会话稳定",
+        items=[
+            ('SCREEN_LEFT', "屏幕左", "A 端 = 朝屏幕左边延伸的那一端（转视角会变）"),
+            ('SCREEN_UP', "屏幕上", "A 端 = 朝屏幕上方延伸的那一端（转视角会变）"),
+            ('WORLD_X', "世界 +X", "A 端 = 朝世界 +X 的那一端（稳定、可复现）"),
+            ('WORLD_Y', "世界 +Y", "A 端 = 朝世界 +Y 的那一端（稳定、可复现）"),
+            ('WORLD_Z', "世界 +Z", "A 端 = 朝世界 +Z 的那一端（稳定、可复现）"),
+            ('STORAGE', "存储顺序", "旧行为：A = 这条边的第 0 个顶点"),
+        ], default='SCREEN_LEFT')
     stop_at_sharp: bpy.props.BoolProperty(
         name="锐点处停止", default=True)
 
@@ -151,6 +187,7 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoopBatch(bpy.types.Operator):
         layout = self.layout
         col = layout.column(align=True)
         col.prop(self, "trace_dir", expand=True)
+        col.prop(self, "dir_rule")
         col.prop(self, "steps")
         col.separator()
         col.prop(self, "max_angle", slider=True)
@@ -168,10 +205,12 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoopBatch(bpy.types.Operator):
             self.report({'WARNING'}, "请先选择至少一条边")
             return {'CANCELLED'}
 
+        ref = reference_vector(context, obj, self.dir_rule)
         chain = set()
         for e in start_edges:
             chain.update(_trace_path(e, self.max_angle, self.jump_threshold,
-                                     self.stop_at_sharp, self.steps, self.trace_dir))
+                                     self.stop_at_sharp, self.steps, self.trace_dir,
+                                     a_end=_a_end(e, ref)))
 
         for e in chain:
             e.select = True
@@ -264,6 +303,7 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
         layout = self.layout
         col = layout.column(align=True)
         col.prop(s, "trace_dir", expand=True)
+        col.prop(s, "dir_rule")
         col.prop(s, "steps")
         col.separator()
         col.prop(s, "max_angle", slider=True)
@@ -300,9 +340,14 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
         else:
             dir_name = base_dir
         steps_text = '不限' if s.steps == 0 else str(s.steps)
+        rule_name = {
+            'SCREEN_LEFT': '屏幕左', 'SCREEN_UP': '屏幕上',
+            'WORLD_X': '世界+X', 'WORLD_Y': '世界+Y', 'WORLD_Z': '世界+Z',
+            'STORAGE': '存储顺序',
+        }.get(s.dir_rule, '屏幕左')
         text = (
             f"悬浮预览非流形循环边链 | 边数:{steps_text}(Shift滚轮) | "
-            f"方向:{dir_name}(Tab) | S设置 | 左键确定 | Shift加选 Ctrl减选 | 右键/ESC退出"
+            f"方向:{dir_name}/{rule_name}(Tab) | S设置 | 左键确定 | Shift加选 Ctrl减选 | 右键/ESC退出"
         )
         try:
             context.workspace.status_text_set(text)
@@ -403,8 +448,10 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
                     best_e = e
             if best_e:
                 self.target_edge_idx = best_e.index
+                ref = reference_vector(context, obj, s.dir_rule)
                 final_edges = _trace_path(best_e, s.max_angle, s.jump_threshold,
-                                          s.stop_at_sharp, s.steps, s.trace_dir)
+                                          s.stop_at_sharp, s.steps, s.trace_dir,
+                                          a_end=_a_end(best_e, ref))
                 self.preview_coords = [(e.verts[0].co.copy(), e.verts[1].co.copy()) for e in final_edges]
             else:
                 self.preview_coords = []
@@ -421,8 +468,10 @@ class BetterExperie_OT_SelectNonManifoldEdgeLoop(bpy.types.Operator):
         bm = bmesh.from_edit_mesh(obj.data)
         bm.edges.ensure_lookup_table()
         start_edge = bm.edges[self.target_edge_idx]
+        ref = reference_vector(context, obj, s.dir_rule)
         final_edges = _trace_path(start_edge, s.max_angle, s.jump_threshold,
-                                  s.stop_at_sharp, s.steps, s.trace_dir)
+                                  s.stop_at_sharp, s.steps, s.trace_dir,
+                                  a_end=_a_end(start_edge, ref))
         if self.select_mode == 'SET':
             bpy.ops.mesh.select_all(action='DESELECT')
         target_state = False if self.select_mode == 'SUB' else True
@@ -475,6 +524,7 @@ class BetterExperie_OT_NonManifoldEdgeLoopSettings(bpy.types.Operator):
         layout = self.layout
         col = layout.column(align=True)
         col.prop(s, "trace_dir", expand=True)
+        col.prop(s, "dir_rule")
         col.prop(s, "steps")
         col.separator()
         col.prop(s, "max_angle", slider=True)

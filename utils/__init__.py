@@ -14,6 +14,8 @@ UTIL_MODULES = (
     "strips_utils",
     "transform_orientation",
     "camera_view_core",
+    "select_direction",
+    "uv_topology",
 )
 
 # ADDON_FOLDER = dirname(dirname(realpath(__file__)))

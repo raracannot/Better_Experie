@@ -14,6 +14,7 @@ MODULE_NAMES = [
     "outliner_mt",
     "sequencer_mt",
     "texteditor_mt",
+    "uv_mt",
     "view3d_mt",
 ]
 # 动态导入所有模块
