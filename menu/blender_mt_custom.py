@@ -75,10 +75,17 @@ def draw_edit_mesh_split(self, context):
     layout.operator("better_experie.separate_edges_to_curve")
 
 
-# ── 顶点组 ──
+# ── 顶点组 / 边属性 / 面属性 ──
 def draw_vertex_group(self, context):
     layout = self.layout
-    layout.operator("better_experie.mesh_add_vertex_group", text="智能顶点组", icon="GROUP_VERTEX")
+    select_mode = context.tool_settings.mesh_select_mode
+    if select_mode[1]:
+        text, icon = "智能边属性", 'EDGESEL'
+    elif select_mode[2]:
+        text, icon = "智能面属性", 'FACESEL'
+    else:
+        text, icon = "智能顶点组", 'GROUP_VERTEX'
+    layout.operator("better_experie.mesh_add_vertex_group", text=text, icon=icon)
 
 
 # ── 显隐切换（编辑/物体共用）──
@@ -187,6 +194,8 @@ def draw_editor_menus(self, context):
     layout.separator()
     layout.operator("better_experie.copy_elements", text="", icon='COPYDOWN')
     layout.operator("better_experie.paste_elements", text="", icon='PASTEDOWN')
+    if obj.type == 'MESH':
+        layout.operator("better_experie.mesh_add_vertex_group", text="", icon='GROUP_VERTEX')
 
 
 # ── 网格筛选式选取 ──

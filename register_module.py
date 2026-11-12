@@ -8,9 +8,10 @@ from .import ops
 from .import utils
 from .import menu
 from . import translation
+from . import workspacetool
 
 
-module_list = [addon_prefs, other, utils, ops, menu, translation] #严格按照顺序依次注册（utils 先于 ops，保证热重载时 ops 取到最新 util）
+module_list = [addon_prefs, other, utils, ops, menu, translation, workspacetool] #严格按照顺序依次注册（utils 先于 ops，保证热重载时 ops 取到最新 util）
 
 def register():
     for module in module_list:

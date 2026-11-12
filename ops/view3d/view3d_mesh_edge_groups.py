@@ -54,25 +54,83 @@ def get_edge_group_attributes(mesh):
     """获取网格内所有 EDGE + FLOAT 属性。"""
     return [attribute for attribute in mesh.attributes if is_edge_group_attribute(attribute)]
 
+def get_attribute_index(mesh, name):
+    """属性在 mesh.attributes 里的下标；找不到返回 -1。"""
+    for index, attribute in enumerate(mesh.attributes):
+        if attribute.name == name:
+            return index
+    return -1
+
+def unique_attribute_name(mesh, base):
+    """属性名在 mesh.attributes 里全局唯一，重名时自己加 .001。
+
+    bmesh 建层遇到跨域同名会静默丢弃该层（既不报错也不自动加 .001），
+    所以建层前必须先把名字算好，不能指望 Blender 兜底。
+    """
+    existing = {attribute.name for attribute in mesh.attributes}
+    if base not in existing:
+        return base
+    index = 1
+    while f"{base}.{index:03d}" in existing:
+        index += 1
+    return f"{base}.{index:03d}"
+
 def get_active_edge_group_index(context, mesh):
-    """获取安全的当前边组索引。"""
-    groups = get_edge_group_attributes(mesh)
-    if not groups:
-        return 0
-    index = context.window_manager.better_experie_edge_groups_active_index
-    return max(0, min(index, len(groups) - 1))
+    """当前边组在 mesh.attributes 里的下标；没有边组时返回 -1。
+
+    template_list 的 active index 是「原始集合下标」，不是过滤后列表的行号，
+    所以这里全程用 mesh.attributes 的下标。
+
+    又因为 mesh.attributes 的下标会随进出编辑模式整体前移
+    （实测编辑模式建的两个组从 12/13 变成 0/1），光存下标会在切模式后指错，
+    所以再记一个名字：下标对不上就按名字把选中的组找回来。
+    """
+    window_manager = context.window_manager
+    count = len(mesh.attributes)
+    if count == 0:
+        return -1
+
+    index = max(0, min(window_manager.better_experie_edge_groups_active_index, count - 1))
+    attribute = mesh.attributes[index]
+    if is_edge_group_attribute(attribute):
+        if window_manager.better_experie_edge_group_active_name != attribute.name:
+            window_manager.better_experie_edge_group_active_name = attribute.name
+        return index
+
+    # 下标失效（切模式、删属性后整体前移、或别的插件改了列表）：按记住的名字找回
+    remembered = window_manager.better_experie_edge_group_active_name
+    if remembered:
+        for fallback, item in enumerate(mesh.attributes):
+            if item.name == remembered and is_edge_group_attribute(item):
+                window_manager.better_experie_edge_groups_active_index = fallback
+                return fallback
+
+    # 名字也没了（组被删/被改名）：退到第一个边组
+    for fallback, attribute in enumerate(mesh.attributes):
+        if is_edge_group_attribute(attribute):
+            window_manager.better_experie_edge_groups_active_index = fallback
+            window_manager.better_experie_edge_group_active_name = attribute.name
+            return fallback
+    return -1
 
 def get_active_edge_group(context, mesh):
     """获取当前活动边组属性。"""
-    groups = get_edge_group_attributes(mesh)
-    if not groups:
-        return None
     index = get_active_edge_group_index(context, mesh)
-    return groups[index]
+    if index < 0:
+        return None
+    attribute = mesh.attributes[index]
+    return attribute if is_edge_group_attribute(attribute) else None
 
-def set_active_edge_group_index(context, index):
-    """设置当前活动边组索引。"""
-    context.window_manager.better_experie_edge_groups_active_index = max(0, index)
+def set_active_edge_group_index(context, mesh, index):
+    """设置当前活动边组索引（mesh.attributes 下标），越界时夹回有效范围。"""
+    window_manager = context.window_manager
+    count = len(mesh.attributes)
+    index = 0 if count == 0 else max(0, min(index, count - 1))
+    window_manager.better_experie_edge_groups_active_index = index
+
+    attribute = mesh.attributes[index] if count else None
+    window_manager.better_experie_edge_group_active_name = (
+        attribute.name if attribute is not None and is_edge_group_attribute(attribute) else "")
 
 def get_edit_float_layer(mesh, attribute_name):
     """获取编辑模式 BMesh 中的边 Float Layer。"""
@@ -295,7 +353,8 @@ class BetterExperie_OT_EdgeGroupAdd(bpy.types.Operator):
             return {'CANCELLED'}
 
         mesh = obj.data
-        attribute_name = self.name.strip() or EDGE_GROUP_DEFAULT_NAME
+        base_name = self.name.strip() or EDGE_GROUP_DEFAULT_NAME
+        attribute_name = unique_attribute_name(mesh, base_name)
         if obj.mode == 'EDIT':
             bm = bmesh.from_edit_mesh(mesh)
             layer = bm.edges.layers.float.new(attribute_name)
@@ -306,16 +365,12 @@ class BetterExperie_OT_EdgeGroupAdd(bpy.types.Operator):
         else:
             attribute = mesh.attributes.new(name=attribute_name,type='FLOAT',domain='EDGE')
             attribute_name = attribute.name
-        groups = get_edge_group_attributes(mesh)
 
-        new_index = next(
-            (
-                index
-                for index, attribute in enumerate(groups)
-                if attribute.name == attribute_name
-            ),max(0, len(groups) - 1),)
+        attribute_index = get_attribute_index(mesh, attribute_name)
+        set_active_edge_group_index(context, mesh, attribute_index if attribute_index >= 0 else 0)
 
-        set_active_edge_group_index(context, new_index)
+        if attribute_name != base_name:
+            self.report({'INFO'}, f"名称【{base_name}】已被占用，边组新建为【{attribute_name}】")
         return {'FINISHED'}
 
 
@@ -333,10 +388,10 @@ class BetterExperie_OT_EdgeGroupRemove(bpy.types.Operator):
 
         mesh = obj.data
         group_index = get_active_edge_group_index(context, mesh)
-        attribute = get_active_edge_group(context, mesh)
-        if attribute is None:
+        if group_index < 0:
             self.report({'WARNING'}, "没有可删除的边组")
             return {'CANCELLED'}
+        attribute = mesh.attributes[group_index]
 
         attribute_name = attribute.name
         if obj.mode == 'EDIT':
@@ -352,8 +407,16 @@ class BetterExperie_OT_EdgeGroupRemove(bpy.types.Operator):
         else:
             mesh.attributes.remove(attribute)
 
-        groups = get_edge_group_attributes(mesh)
-        set_active_edge_group_index(context,min(group_index, max(0, len(groups) - 1)))
+        # 删除后优先选原位置之后的第一个边组，没有就退回最后一个
+        remaining = [
+            index for index, item in enumerate(mesh.attributes)
+            if is_edge_group_attribute(item)
+        ]
+        if remaining:
+            next_index = next((index for index in remaining if index >= group_index), remaining[-1])
+        else:
+            next_index = 0
+        set_active_edge_group_index(context, mesh, next_index)
         return {'FINISHED'}
 
 
@@ -565,6 +628,9 @@ class BETTER_EXPERIE_PT_edge_groups(bpy.types.Panel):
         obj = context.object
         mesh = obj.data
         window_manager = context.window_manager
+
+        # 读一次活动边组：索引若失效（切模式 / 删改属性导致整体前移）会在这里顺手修正，
+        # 保证列表高亮和实际操作的是同一个边组
         active_group = get_active_edge_group(context, mesh)
 
         row = layout.row()
@@ -625,6 +691,8 @@ def register():
 
     bpy.types.WindowManager.better_experie_edge_groups_active_index = bpy.props.IntProperty(
         name="活动边组索引",default=0,min=0)
+    bpy.types.WindowManager.better_experie_edge_group_active_name = bpy.props.StringProperty(
+        name="活动边组名称",description="记住选中的边组名，属性下标失效时据此恢复",default="")
     bpy.types.WindowManager.better_experie_edge_group_weight = bpy.props.FloatProperty(
         name="Edge Group Weight",description="分配给选中边的边组权重",default=1.0,min=0.0,max=1.0)
 
@@ -644,6 +712,8 @@ def unregister():
         del bpy.types.WindowManager.better_experie_edge_group_weight
     if hasattr(bpy.types.WindowManager, "better_experie_edge_groups_active_index"):
         del bpy.types.WindowManager.better_experie_edge_groups_active_index
+    if hasattr(bpy.types.WindowManager, "better_experie_edge_group_active_name"):
+        del bpy.types.WindowManager.better_experie_edge_group_active_name
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

@@ -18,6 +18,34 @@ def light_linking_label(link_type):
     return "灯光链接" if link_type == "LIGHT" else "阴影链接"
 
 
+# 非物体模式下吸管无法拾取，状态栏用这个把模式名说清楚
+MODE_LABELS = {
+    "EDIT_MESH": "编辑",
+    "EDIT_CURVE": "编辑",
+    "EDIT_SURFACE": "编辑",
+    "EDIT_ARMATURE": "编辑",
+    "EDIT_METABALL": "编辑",
+    "EDIT_LATTICE": "编辑",
+    "EDIT_TEXT": "编辑",
+    "SCULPT": "雕刻",
+    "PAINT_WEIGHT": "权重绘制",
+    "PAINT_VERTEX": "顶点绘制",
+    "PAINT_TEXTURE": "纹理绘制",
+    "PAINT_GREASE_PENCIL": "绘制",
+    "POSE": "姿态",
+}
+
+
+def light_linking_mode_label(mode):
+    return MODE_LABELS.get(mode, mode.replace("_", " ").title())
+
+
+def light_linking_blocked_status(link_type, mode):
+    """非物体模式下的状态栏文案（吸管此时无法拾取）"""
+    return (f"{light_linking_label(link_type)}：{light_linking_mode_label(mode)}模式下无法拾取"
+            f" | 切回物体模式再点 | Esc/右键：结束")
+
+
 def light_linking_auto_children_enabled(context):
     scene = getattr(context, "scene", None)
     if scene is None:
@@ -203,6 +231,64 @@ def light_linking_remove_object(light_obj, obj, link_type):
     except Exception as error:
         print("[Light Linking] 移除对象失败：", error)
         return False
+
+
+def light_linking_find_item(collection, obj):
+    """按 collection.objects 的下标对应到 collection_objects 条目"""
+    names = [item.name for item in collection.objects]
+    if obj.name not in names:
+        return None
+    index = names.index(obj.name)
+    items = list(light_linking_collection_objects(collection))
+    if 0 <= index < len(items):
+        return items[index]
+    return None
+
+
+def light_linking_ensure_state(context, light_obj, obj, link_type, state):
+    """确保 obj 在链接表里、且状态为 state（批量语义模式用）
+
+    新建的集合会直接落成 state 对应的模式：state=EXCLUDE 时第一条就是排除条目，
+    集合即为“排除表”，不会出现“空表按包含推断”导致空操作的情况。
+    """
+    if obj is None or obj == light_obj:
+        return False
+    collection = light_linking_ensure_collection(context, light_obj, link_type)
+    if collection is None:
+        return False
+
+    item = light_linking_find_item(collection, obj)
+    if item is not None:
+        if item.light_linking.link_state == state:
+            return False
+        item.light_linking.link_state = state
+        light_obj.update_tag()
+        return True
+
+    try:
+        collection.objects.link(obj)
+        item = light_linking_find_item(collection, obj)
+        if item is not None:
+            item.light_linking.link_state = state
+        light_obj.update_tag()
+        return True
+    except Exception as error:
+        print("[Light Linking] 添加对象失败：", error)
+        return False
+
+
+def light_linking_batch_status(link_type, semantics, total, dropped, fresh):
+    """批量模式的状态栏文案"""
+    semantic_text = "包含" if semantics == "INCLUDE" else "排除"
+    action_text = "包含该物体" if semantics == "INCLUDE" else "排除该物体"
+    extras = []
+    if dropped:
+        extras.append(f"剔除 {dropped}")
+    if fresh:
+        extras.append(f"新建 {fresh}")
+    suffix = ("（" + " / ".join(extras) + "）") if extras else ""
+    return (f"{light_linking_label(link_type)}：批量·语义={semantic_text}｜目标 {total}{suffix}"
+            f"｜左键={action_text}｜Ctrl+左键=移除｜Esc/右键：结束")
 
 
 def light_linking_restore_selection(context, selected_names, active_name):
@@ -431,7 +517,8 @@ class BetterExperie_OT_LightLinkingSmartConvertMode(bpy.types.Operator):
 class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
     bl_idname = "better_experie.light_linking_continuous_pick"
     bl_label = "吸管拾取"
-    bl_description = "在三维视图或大纲中点击对象以添加链接，Ctrl+点击移除，Esc、右键或回车结束"
+    bl_description = ("左键：只作用于活动对象；Ctrl+左键：批量作用于所有选中对象（按活动/众数语义自动剔除）\n"
+                      "在三维视图或大纲中点击对象以添加链接，Ctrl+点击移除，Esc、右键或回车结束")
     bl_options = {"REGISTER", "UNDO"}
 
     link_type: EnumProperty(items=LINK_TYPES, default="LIGHT")
@@ -445,17 +532,32 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
         if context.object is None:
             return {"CANCELLED"}
 
-        self.light_name = context.object.name
+        self.batch_mode = bool(getattr(event, "ctrl", False))
         self.added_count = 0
         self.removed_count = 0
         self.added_child_count = 0
         self.removed_child_count = 0
+        self.dropped_count = 0
+        self.fresh_count = 0
+        self.target_names = []
+        self.semantics = "INCLUDE"
+        self.light_name = ""
         self.previous_selected_names = [obj.name for obj in context.selected_objects]
         self.previous_active_name = context.view_layer.objects.active.name if context.view_layer.objects.active else ""
+        self._last_mode = context.mode
+        self._mode_blocked = False
+
+        if self.batch_mode:
+            self._prepare_batch(context)
+            if not self.target_names:
+                self.report({"WARNING"}, "没有可作用的目标对象")
+                return {"CANCELLED"}
+        else:
+            self.light_name = context.object.name
 
         try:
             context.window.cursor_modal_set("EYEDROPPER")
-            light_linking_update_status(context, context.object, self.link_type)
+            self.refresh_status(context)
             add_modal_border(self, context)
             context.window_manager.modal_handler_add(self)
             type(self)._active = self
@@ -470,6 +572,14 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
                 context.window.cursor_modal_set("EYEDROPPER")
             except Exception:
                 pass
+
+            # 模式变了就刷新状态栏：进出编辑模式时提示跟着变
+            mode = context.mode
+            if mode != getattr(self, "_last_mode", mode):
+                self._last_mode = mode
+                self._mode_blocked = False
+                self.refresh_status(context)
+
             if event.type in {"ESC", "RIGHTMOUSE", "RET", "NUMPAD_ENTER"} and event.value == "PRESS":
                 return self.finish(context)
 
@@ -477,8 +587,8 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
                 area, region = self.area_region_under_mouse(context, event)
                 if area is None or region is None:
                     return {"RUNNING_MODAL"}
-                if bpy.data.objects.get(self.light_name) is None:
-                    self.report({"WARNING"}, "灯光对象已不存在，吸管拾取结束")
+                if not self._targets_alive():
+                    self.report({"WARNING"}, "目标对象已不存在，吸管拾取结束")
                     return self.finish(context)
                 if area.type == "VIEW_3D":
                     self.pick_viewport(context, area, region, event)
@@ -518,12 +628,93 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
 
         self.pick_objects(context, area, region, event, select_operator)
 
-    def pick_objects(self, context, area, region, event, select_operator):
-        light_obj = bpy.data.objects.get(self.light_name)
-        if light_obj is None:
-            return
-        # 编辑模式等非物体模式下无法可靠改写对象选择，直接忽略本次点击
+    def refresh_status(self, context):
+        """按当前模式刷新状态栏：非物体模式给出“切回物体模式”的提示"""
         if context.mode != "OBJECT":
+            try:
+                context.workspace.status_text_set(
+                    light_linking_blocked_status(self.link_type, context.mode))
+            except Exception:
+                pass
+            return
+        if self.batch_mode:
+            try:
+                context.workspace.status_text_set(
+                    light_linking_batch_status(self.link_type, self.semantics,
+                                               len(self.target_names),
+                                               self.dropped_count, self.fresh_count))
+            except Exception:
+                pass
+            return
+        light_obj = bpy.data.objects.get(self.light_name)
+        if light_obj is not None:
+            light_linking_update_status(context, light_obj, self.link_type)
+
+    def _targets_alive(self):
+        if self.batch_mode:
+            return any(bpy.data.objects.get(name) is not None for name in self.target_names)
+        return bpy.data.objects.get(self.light_name) is not None
+
+    def _prepare_batch(self, context):
+        """批量：收集目标、按活动物体（或众数）决定语义、剔除模式不同的对象"""
+        names = []
+        for obj in context.selected_objects:
+            if obj.name not in names:
+                names.append(obj.name)
+        active = context.object
+        if active is not None and active.name not in names:
+            names.insert(0, active.name)
+
+        self.semantics = self._decide_semantics(context, names)
+
+        kept = []
+        for name in names:
+            obj = bpy.data.objects.get(name)
+            if obj is None:
+                continue
+            collection = light_linking_get_collection(obj, self.link_type)
+            if collection is None:
+                # 还没有链接集合：跟随本次语义新建，不剔除
+                kept.append(name)
+                self.fresh_count += 1
+            elif light_linking_mode(collection) == self.semantics:
+                kept.append(name)
+            else:
+                self.dropped_count += 1
+        self.target_names = kept
+
+    def _decide_semantics(self, context, names):
+        """活动物体优先决定语义；没有活动物体时取众数，平票按包含"""
+        active = context.object
+        if active is not None:
+            collection = light_linking_get_collection(active, self.link_type)
+            return light_linking_mode(collection) if collection is not None else "INCLUDE"
+
+        include = 0
+        exclude = 0
+        for name in names:
+            obj = bpy.data.objects.get(name)
+            if obj is None:
+                continue
+            collection = light_linking_get_collection(obj, self.link_type)
+            mode = light_linking_mode(collection) if collection is not None else "INCLUDE"
+            if mode == "EXCLUDE":
+                exclude += 1
+            else:
+                include += 1
+        return "EXCLUDE" if exclude > include else "INCLUDE"
+
+    def pick_objects(self, context, area, region, event, select_operator):
+        if not self._targets_alive():
+            return
+        # 编辑模式等非物体模式下无法可靠改写对象选择，直接忽略本次点击；
+        # 但要给一次反馈，否则用户会以为吸管坏了
+        if context.mode != "OBJECT":
+            if not getattr(self, "_mode_blocked", False):
+                self._mode_blocked = True
+                self.report({"WARNING"},
+                            f"当前是{light_linking_mode_label(context.mode)}模式，切回物体模式后才能拾取")
+                self.refresh_status(context)
             return
         old_selected = [obj.name for obj in context.selected_objects]
         old_active = context.view_layer.objects.active.name if context.view_layer.objects.active else ""
@@ -539,33 +730,65 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
         finally:
             light_linking_restore_selection(context, old_selected, old_active)
 
-        self.apply_picked(context, light_obj, picked, event.ctrl)
-        light_linking_update_status(context, light_obj, self.link_type)
+        self.apply_picked(context, picked, event.ctrl)
+        self.refresh_status(context)
         light_linking_tag_redraw(context)
 
-    def apply_picked(self, context, light_obj, picked, remove):
+    def apply_picked(self, context, picked, remove):
         if not picked:
             return
         include_children = light_linking_auto_children_enabled(context)
         picked_names = {obj.name for obj in picked}
+        targets = light_linking_collect_targets(picked, include_children)
 
-        for target in light_linking_collect_targets(picked, include_children):
-            is_child = target.name not in picked_names
-            if remove:
-                if light_linking_remove_object(light_obj, target, self.link_type):
-                    self.removed_count += 1
-                    if is_child:
-                        self.removed_child_count += 1
-            elif light_linking_add_object(context, light_obj, target, self.link_type):
-                self.added_count += 1
+        if self.batch_mode:
+            light_objects = [bpy.data.objects.get(name) for name in self.target_names]
+            light_objects = [obj for obj in light_objects if obj is not None]
+        else:
+            light_obj = bpy.data.objects.get(self.light_name)
+            light_objects = [light_obj] if light_obj is not None else []
+        if not light_objects:
+            return
+
+        for light_obj in light_objects:
+            for target in targets:
+                if target == light_obj:
+                    continue
+                self._apply_one(context, light_obj, target, remove, picked_names)
+
+    def _apply_one(self, context, light_obj, target, remove, picked_names):
+        is_child = target.name not in picked_names
+        if remove:
+            # Ctrl+拾取：维持原来的“从链接表里移除”，不参与语义转换
+            if light_linking_remove_object(light_obj, target, self.link_type):
+                self.removed_count += 1
                 if is_child:
-                    self.added_child_count += 1
+                    self.removed_child_count += 1
+            return
+        if self.batch_mode:
+            changed = light_linking_ensure_state(
+                context, light_obj, target, self.link_type, self.semantics)
+        else:
+            changed = light_linking_add_object(context, light_obj, target, self.link_type)
+        if changed:
+            self.added_count += 1
+            if is_child:
+                self.added_child_count += 1
 
     def finish(self, context):
         auto_children = light_linking_auto_children_enabled(context)
         self.teardown(context)
         if self.added_count > 0 or self.removed_count > 0:
-            text = f"已添加 {self.added_count} 个，移除 {self.removed_count} 个{light_linking_label(self.link_type)}对象"
+            if self.batch_mode:
+                semantic_text = "包含" if self.semantics == "INCLUDE" else "排除"
+                text = (f"批量{semantic_text}：{len(self.target_names)} 个目标，"
+                        f"新增 {self.added_count} 条、移除 {self.removed_count} 条")
+                if self.dropped_count:
+                    text += f"；跳过 {self.dropped_count} 个（模式不同）"
+                if self.fresh_count:
+                    text += f"；新建 {self.fresh_count} 个链接集合"
+            else:
+                text = f"已添加 {self.added_count} 个，移除 {self.removed_count} 个{light_linking_label(self.link_type)}对象"
             if auto_children and (self.added_child_count or self.removed_child_count):
                 text += f"（其中子级：添加 {self.added_child_count} 个，移除 {self.removed_child_count} 个）"
             self.report({"INFO"}, text)
