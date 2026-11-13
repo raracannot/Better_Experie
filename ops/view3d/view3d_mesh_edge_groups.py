@@ -8,6 +8,8 @@ import gpu
 from gpu_extras.batch import batch_for_shader
 from bpy.app.handlers import persistent
 
+from ...addon_prefs import quick_group_tools_enabled
+
 # ------------------------------------------------------------------------
 # 常量
 # ------------------------------------------------------------------------
@@ -324,15 +326,27 @@ class BETTER_EXPERIE_UL_edge_groups(bpy.types.UIList):
     def filter_items(self, _context, mesh, _property):
         flags = []
         order = list(range(len(mesh.attributes)))
+        # 4.2 没有 bitflag_item_never_show，退回 0（不设过滤位即不显示）
+        hidden = getattr(self, "bitflag_item_never_show", 0)
         for attribute in mesh.attributes:
             if is_edge_group_attribute(attribute):
                 flags.append(self.bitflag_filter_item)
             else:
-                flags.append(self.bitflag_item_never_show)
+                flags.append(hidden)
         return flags, order
 
-    def draw_item(self,_context,layout,_data,item,_icon,_active_data,_active_propname,_index):
-        layout.prop(item,"name",text="",emboss=False,icon='EDGESEL')
+    def draw_item(self, context, layout, _data, item, _icon, _active_data, _active_propname, index):
+        row = layout.row(align=True)
+        if context.mode == 'EDIT_MESH' and quick_group_tools_enabled():
+            # 行内按钮：选择（只选/Shift 加选/Ctrl 弃选）与保存选集（加入/覆盖/移除）
+            select_button = row.operator("better_experie.edge_group_select", text="", emboss=False, icon='RESTRICT_SELECT_OFF')
+            select_button.index = index
+            save_button = row.operator("better_experie.edge_group_quick_assign", text="", emboss=False, icon='IMPORT')
+            save_button.index = index
+            save_button.weight = context.window_manager.better_experie_edge_group_weight
+            row.separator()
+            
+        row.prop(item, "name", text="", emboss=False, icon='EDGESEL')
 
 # ------------------------------------------------------------------------
 # 新增 / 删除边组
@@ -417,21 +431,78 @@ class BetterExperie_OT_EdgeGroupRemove(bpy.types.Operator):
         else:
             next_index = 0
         set_active_edge_group_index(context, mesh, next_index)
+        self.report({'INFO'}, f"已删除边组【{attribute_name}】")
         return {'FINISHED'}
 
 
 # ------------------------------------------------------------------------
 # 编辑模式：分配 / 移除 / 选择
 # ------------------------------------------------------------------------
+def write_edge_weights(bm, layer, weight, state):
+    """把权重写进边组：加入 / 覆盖 / 移除，返回 (写入数, 清零数)"""
+    written = 0
+    cleared = 0
+    for edge in bm.edges:
+        if state == 'REMOVE':
+            if edge.select and edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD:
+                edge[layer] = 0.0
+                cleared += 1
+            continue
+        if edge.select:
+            edge[layer] = weight
+            written += 1
+        elif state == 'REPLACE' and edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD:
+            edge[layer] = 0.0
+            cleared += 1
+    return written, cleared
+
+
+def report_edge_weights(operator, name, weight, state, written, cleared):
+    if state == 'REMOVE':
+        if cleared:
+            operator.report({'INFO'}, f"已从【{name}】移除 {cleared} 条边")
+        else:
+            operator.report({'INFO'}, f"选中的边本来就不在【{name}】里")
+    elif state == 'REPLACE':
+        operator.report({'INFO'},
+                        f"已覆盖【{name}】：{written} 条写入权重 "
+                        f"{weight:.3f}，{cleared} 条清零")
+    elif written:
+        operator.report({'INFO'}, f"已向 {written} 条边分配权重 {weight:.3f}")
+    else:
+        operator.report({'INFO'}, "没有选中的边")
+
+
 class BetterExperie_OT_EdgeGroupAssign(bpy.types.Operator):
     bl_idname = "better_experie.edge_group_assign"
-    bl_description = "将 Weight 写入选中的边"
+    bl_description = "将 Weight 写入选中的边；点击=加入，Shift+点击=覆盖，Ctrl+点击=移除"
     bl_label = "分配"
     bl_options = {'REGISTER', 'UNDO'}
 
     weight: bpy.props.FloatProperty(
         name="Weight",description="写入当前选中边的权重",
         default=1.0,min=0.0,max=1.0)
+
+    state: bpy.props.EnumProperty(
+        name="分配方式",
+        items=[
+            ('ADD', "加入", "把选中的边加入该边组"),
+            ('REPLACE', "覆盖", "写入选中的边，未选中的边清零"),
+            ('REMOVE', "移除", "把选中的边移出该边组"),
+        ],
+        default='ADD',
+    )
+
+    def invoke(self, context, event):
+        # 面板按钮点击时 event 由 window->runtime->eventstate 补上
+        if event is not None:
+            if getattr(event, "ctrl", False):
+                self.state = 'REMOVE'
+            elif getattr(event, "shift", False):
+                self.state = 'REPLACE'
+            else:
+                self.state = 'ADD'
+        return self.execute(context)
 
     def execute(self, context):
         obj = get_active_mesh_object(context)
@@ -450,18 +521,76 @@ class BetterExperie_OT_EdgeGroupAssign(bpy.types.Operator):
             self.report({'ERROR'}, "未找到边组数据层")
             return {'CANCELLED'}
 
-        selected_count = 0
-        for edge in bm.edges:
-            if edge.select:
-                edge[layer] = self.weight
-                selected_count += 1
-
+        written, cleared = write_edge_weights(bm, layer, self.weight, self.state)
         bmesh.update_edit_mesh(mesh,loop_triangles=False,destructive=False)
+        report_edge_weights(self, attribute.name, self.weight, self.state, written, cleared)
+        return {'FINISHED'}
 
-        if selected_count == 0:
-            self.report({'INFO'}, "没有选中的边")
-        else:
-            self.report({'INFO'},f"已向 {selected_count} 条边分配权重 {self.weight:.3f}")
+
+class BetterExperie_OT_EdgeGroupQuickAssign(bpy.types.Operator):
+    bl_idname = "better_experie.edge_group_quick_assign"
+    bl_label = "保存选集到边组"
+    bl_description = "左键点击：将选中项加入该边组（加入）\nShift+左键点击：以选中项作为该边组（覆盖）\nCtrl+左键点击：在边组中移出选中项（移除）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    index: bpy.props.IntProperty(
+        name="边组下标",
+        description="列表行下标；-1 表示当前活动边组",
+        default=-1,
+    )
+    weight: bpy.props.FloatProperty(
+        name="Weight", description="写入选中边的权重",
+        default=1.0, min=0.0, max=1.0)
+    state: bpy.props.EnumProperty(
+        name="保存方式",
+        items=[
+            ('ADD', "加入", "把选中的边加入该边组"),
+            ('REPLACE', "覆盖", "写入选中的边，未选中的边清零"),
+            ('REMOVE', "移除", "把选中的边移出该边组"),
+        ],
+        default='ADD',
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = get_active_mesh_object(context)
+        return obj is not None and obj.mode == 'EDIT'
+
+    def invoke(self, context, event):
+        if self.index >= 0 and event is not None:
+            if getattr(event, "ctrl", False):
+                self.state = 'REMOVE'
+            elif getattr(event, "shift", False):
+                self.state = 'REPLACE'
+            else:
+                self.state = 'ADD'
+        return self.execute(context)
+
+    def execute(self, context):
+        obj = get_active_mesh_object(context)
+        if obj is None or obj.mode != 'EDIT':
+            self.report({'WARNING'}, "请在网格编辑模式下执行此操作")
+            return {'CANCELLED'}
+
+        mesh = obj.data
+        if not 0 <= self.index < len(mesh.attributes):
+            self.report({'WARNING'}, "该边组已不存在，请刷新列表后重试")
+            return {'CANCELLED'}
+
+        attribute = mesh.attributes[self.index]
+        if not is_edge_group_attribute(attribute):
+            self.report({'WARNING'}, f"【{attribute.name}】不是边组")
+            return {'CANCELLED'}
+        set_active_edge_group_index(context, mesh, self.index)
+
+        bm, layer = get_edit_float_layer(mesh, attribute.name)
+        if layer is None:
+            self.report({'ERROR'}, "未找到边组数据层")
+            return {'CANCELLED'}
+
+        written, cleared = write_edge_weights(bm, layer, self.weight, self.state)
+        bmesh.update_edit_mesh(mesh,loop_triangles=False,destructive=False)
+        report_edge_weights(self, attribute.name, self.weight, self.state, written, cleared)
         return {'FINISHED'}
 
 class BetterExperie_OT_EdgeGroupRemoveFrom(bpy.types.Operator):
@@ -487,18 +616,109 @@ class BetterExperie_OT_EdgeGroupRemoveFrom(bpy.types.Operator):
             self.report({'ERROR'}, "未找到边组数据层")
             return {'CANCELLED'}
 
+        cleared = 0
+        selected = 0
         for edge in bm.edges:
-            if edge.select:
+            if not edge.select:
+                continue
+            selected += 1
+            if edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD:
                 edge[layer] = 0.0
+                cleared += 1
 
         bmesh.update_edit_mesh(mesh,loop_triangles=False,destructive=False)
+
+        if selected == 0:
+            self.report({'INFO'}, "没有选中的边")
+        elif cleared == 0:
+            self.report({'INFO'}, f"选中的边本来就不在【{attribute.name}】里")
+        else:
+            self.report({'INFO'}, f"已从【{attribute.name}】移除 {cleared} 条边")
         return {'FINISHED'}
+
+def apply_selection_by_edges(bm, members, state):
+    """按边集合改选择状态（只动边，端点由边自动带上）。
+
+    三个坑都实测过：
+    1. bm.select_flush() 会把「两端点都已选中」的额外边也选上（6 条变 7 条）；
+    2. 写 face.select = True 会连带选中该面的所有边，所以只在「该面所有边已选中」时才补面；
+    3. 写 face.select = False 会连带取消该面的所有边，所以弃选时先记下要保留的边，
+       清完面再恢复，否则已选中的边会被一起清掉。
+    """
+    if state == 'REPLACE':
+        for vert in bm.verts:
+            vert.select = False
+        for edge in bm.edges:
+            edge.select = False
+        for face in bm.faces:
+            face.select = False
+
+    member_set = set(members)
+    if state == 'REMOVE':
+        affected_faces = {face for edge in members for face in edge.link_faces}
+        doomed = [face for face in affected_faces
+                  if face.select and any(edge in member_set for edge in face.edges)]
+        # 写 face.select = False 会把该面的边一起取消，所以先记下要保留的边
+        keep_edges = [edge for edge in bm.edges if edge.select and edge not in member_set]
+        for face in doomed:
+            face.select = False
+        for edge in keep_edges:
+            edge.select = True
+        for edge in members:
+            edge.select = False
+        for face in affected_faces:
+            if not face.select and all(edge.select for edge in face.edges):
+                face.select = True
+        return
+
+    # edge.select = True 本身会把端点带上，不需要再手点顶点
+    for edge in members:
+        edge.select = True
+
+    # 只补「所有边都选中」的面：这样不会带出多余边；
+    # 反过来写 face.select = False 会把该面的边一起取消，所以永远不写 False
+    for face in {face for edge in members for face in edge.link_faces}:
+        if not face.select and all(edge.select for edge in face.edges):
+            face.select = True
+
 
 class BetterExperie_OT_EdgeGroupSelect(bpy.types.Operator):
     bl_idname = "better_experie.edge_group_select"
-    bl_description = "选择当前边组中 Weight 大于零的边"
-    bl_label = "选择"
+    bl_label = "选择边组"
+    bl_description = "左键点击：添加该边组的边到选中项（加入）\nShift+左键点击：以该边组的边设为选中项（覆盖）\nCtrl+左键点击：从选中项中取消选中该边组的边（移除）"
     bl_options = {'REGISTER', 'UNDO'}
+
+    index: bpy.props.IntProperty(
+        name="边组下标",
+        description="列表行下标；-1 表示当前活动边组",
+        default=-1,
+    )
+    state: bpy.props.EnumProperty(
+        name="选择方式",
+        items=[
+            ('REPLACE', "只选", "清空其它选择，只保留该边组的边"),
+            ('ADD', "加选", "把该边组的边加入当前选择"),
+            ('REMOVE', "弃选", "从当前选择里去掉该边组的边"),
+        ],
+        default='ADD',
+    )
+
+    @classmethod
+    def poll(cls, context):
+        obj = get_active_mesh_object(context)
+        return obj is not None and obj.mode == 'EDIT'
+
+    def invoke(self, context, event):
+        # 只有列表行按钮（index >= 0）才用修饰键决定方式；
+        # 面板按钮（index = -1）沿用按钮上写死的 state，语义与原生顶点组面板一致
+        if self.index >= 0 and event is not None:
+            if getattr(event, "ctrl", False):
+                self.state = 'REMOVE'
+            elif getattr(event, "shift", False):
+                self.state = 'REPLACE'
+            else:
+                self.state = 'ADD'
+        return self.execute(context)
 
     def execute(self, context):
         obj = get_active_mesh_object(context)
@@ -507,9 +727,8 @@ class BetterExperie_OT_EdgeGroupSelect(bpy.types.Operator):
             return {'CANCELLED'}
 
         mesh = obj.data
-        attribute = get_active_edge_group(context, mesh)
+        attribute = self._resolve_attribute(context, mesh)
         if attribute is None:
-            self.report({'WARNING'}, "请先创建或选择一个边组")
             return {'CANCELLED'}
 
         bm, layer = get_edit_float_layer(mesh, attribute.name)
@@ -517,12 +736,39 @@ class BetterExperie_OT_EdgeGroupSelect(bpy.types.Operator):
             self.report({'ERROR'}, "未找到边组数据层")
             return {'CANCELLED'}
 
-        for edge in bm.edges:
-            if edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD:
-                edge.select = True
+        members = [edge for edge in bm.edges if edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD]
 
-        bmesh.update_edit_mesh(mesh,loop_triangles=False,destructive=False)
+        apply_selection_by_edges(bm, members, self.state)
+
+        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+
+        if not members:
+            self.report({'INFO'}, f"边组【{attribute.name}】里没有已分配的边")
+            return {'FINISHED'}
+
+        action = {'REPLACE': "只选", 'ADD': "加选", 'REMOVE': "弃选"}[self.state]
+        self.report({'INFO'}, f"{action} {len(members)} 条边（{attribute.name}）")
         return {'FINISHED'}
+
+    def _resolve_attribute(self, context, mesh):
+        """index >= 0 时取该行边组并设为活动组；-1 时取活动组"""
+        if self.index < 0:
+            attribute = get_active_edge_group(context, mesh)
+            if attribute is None:
+                self.report({'WARNING'}, "请先创建或选择一个边组")
+            return attribute
+
+        if self.index >= len(mesh.attributes):
+            self.report({'WARNING'}, "该边组已不存在，请刷新列表后重试")
+            return None
+
+        attribute = mesh.attributes[self.index]
+        if not is_edge_group_attribute(attribute):
+            self.report({'WARNING'}, f"【{attribute.name}】不是边组")
+            return None
+
+        set_active_edge_group_index(context, mesh, self.index)
+        return attribute
 
 
 class BetterExperie_OT_EdgeGroupDeselect(bpy.types.Operator):
@@ -548,9 +794,8 @@ class BetterExperie_OT_EdgeGroupDeselect(bpy.types.Operator):
             self.report({'ERROR'}, "未找到边组数据层")
             return {'CANCELLED'}
 
-        for edge in bm.edges:
-            if edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD:
-                edge.select = False
+        members = [edge for edge in bm.edges if edge[layer] > EDGE_GROUP_MEMBER_THRESHOLD]
+        apply_selection_by_edges(bm, members, 'REMOVE')
 
         bmesh.update_edit_mesh(mesh,loop_triangles=False,destructive=False)
         return {'FINISHED'}
@@ -658,7 +903,9 @@ class BETTER_EXPERIE_PT_edge_groups(bpy.types.Panel):
             assign_operator.weight = window_manager.better_experie_edge_group_weight
             row.operator("better_experie.edge_group_remove_from",text="移除",)
             row.separator()
-            row.operator("better_experie.edge_group_select", text="选择")
+            panel_select = row.operator("better_experie.edge_group_select", text="选择")
+            panel_select.index = -1
+            panel_select.state = 'ADD'
             row.operator("better_experie.edge_group_deselect", text="取消选择")
         
             layout.use_property_split = True
@@ -677,6 +924,7 @@ classes = (
     BetterExperie_OT_EdgeGroupAdd,
     BetterExperie_OT_EdgeGroupRemove,
     BetterExperie_OT_EdgeGroupAssign,
+    BetterExperie_OT_EdgeGroupQuickAssign,
     BetterExperie_OT_EdgeGroupRemoveFrom,
     BetterExperie_OT_EdgeGroupSelect,
     BetterExperie_OT_EdgeGroupDeselect,

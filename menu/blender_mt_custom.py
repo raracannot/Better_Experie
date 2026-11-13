@@ -1,6 +1,13 @@
 
 import bpy
 
+from ..addon_prefs import preference_enabled
+
+try:  # 大纲自定义排序（5.3+ 才有 API，低版本菜单里不会出现）
+    from ..ops.other.other_outliner_sort import draw_outliner_sort
+except Exception:
+    draw_outliner_sort = None
+
 
 # ── 网格选择 → 循环/环/非流形 ──
 def draw_edit_mesh_select_loops(self, context):
@@ -97,6 +104,8 @@ def draw_toggle_hidden(self, context):
 
 # ── 添加网格 ──
 def draw_mesh_add(self, context):
+    if not preference_enabled("show_more_meshes", True):
+        return
     if context.mode == 'OBJECT':
         layout = self.layout
         layout.menu("VIEW3D_MT_better_experie_more_meshes", icon='COLLECTION_COLOR_02')
@@ -185,6 +194,8 @@ def draw_object_cleanup(self, context):
 
 # ── 编辑标题栏（复制粘贴元素）──
 def draw_editor_menus(self, context):
+    if not preference_enabled("show_edit_quick_tools", True):
+        return
     obj = context.active_object
     if not obj or obj.type not in {'MESH', 'CURVE', 'SURFACE', 'ARMATURE', 'GPENCIL'}:
         return
@@ -262,6 +273,12 @@ def register():
     bpy.types.NODE_MT_view.append(draw_node_view)
     bpy.types.TOPBAR_MT_render.append(draw_topbar_render)
     bpy.types.TOPBAR_MT_file_cleanup.append(draw_topbar_file_cleanup)
+    if draw_outliner_sort is not None:
+        try:
+            bpy.types.OUTLINER_MT_object.append(draw_outliner_sort)
+            bpy.types.OUTLINER_MT_collection.append(draw_outliner_sort)
+        except Exception:
+            pass
 
 
 def unregister():
@@ -292,3 +309,9 @@ def unregister():
     bpy.types.NODE_MT_view.remove(draw_node_view)
     bpy.types.TOPBAR_MT_render.remove(draw_topbar_render)
     bpy.types.TOPBAR_MT_file_cleanup.remove(draw_topbar_file_cleanup)
+    if draw_outliner_sort is not None:
+        for menu in (bpy.types.OUTLINER_MT_object, bpy.types.OUTLINER_MT_collection):
+            try:
+                menu.remove(draw_outliner_sort)
+            except Exception:
+                pass

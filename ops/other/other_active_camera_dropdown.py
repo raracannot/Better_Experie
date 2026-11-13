@@ -2,6 +2,8 @@
 
 import bpy
 
+from ...addon_prefs import preference_enabled
+
 camera_items = []
 none_camera = "__NO_CAMERA__"
 
@@ -120,6 +122,8 @@ class BetterExperie_OT_CameraSwitch(bpy.types.Operator):
         
         
 def _draw_camera_dropdown(self, context):
+    if not preference_enabled("show_camera_dropdown", True):
+        return
     if context.region.alignment == 'RIGHT':
         row = self.layout.row(align=True)
         scene = context.scene

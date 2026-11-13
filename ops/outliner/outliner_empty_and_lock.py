@@ -2,6 +2,8 @@
 
 import bpy
 
+from ...addon_prefs import preference_enabled
+
 
 class BetterExperie_OT_ToggleTransformLocks(bpy.types.Operator):
     bl_idname = "better_experie.toggle_transform_locks"
@@ -127,6 +129,8 @@ class BetterExperie_OT_AddEmptySibling(bpy.types.Operator):
         return {'FINISHED'}
 
 def draw_outliner_header_button(self, context):
+    if not preference_enabled("show_outliner_quick_add", True):
+        return
     if getattr(context.space_data, "display_mode", "") == 'VIEW_LAYER':
         row = self.layout.row(align=True)
         row.operator("better_experie.toggle_transform_locks", text="", icon='LOCKED')

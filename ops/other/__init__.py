@@ -21,6 +21,7 @@ MODULE_NAMES = [
     "nodetree_aov_rescan",
     "other_object_dye_tool",
     "other_material_dye_tool",
+    "other_outliner_sort",
 ]
 # 动态导入所有模块
 ops_module_list = [importlib.import_module(f".{name}", __package__) for name in MODULE_NAMES]

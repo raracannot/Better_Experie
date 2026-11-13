@@ -1,6 +1,14 @@
-﻿#--------------------python--------------------
+#--------------------python--------------------
 import bpy
 import datetime
+
+# Blender 5.3 起原生支持多语言输入，插件里的这个入口从 5.3 开始自动隐藏
+MULTILINGUAL_NATIVE_SINCE = (5, 3, 0)
+
+
+def multilingual_native():
+    """当前 Blender 是否已经原生支持多语言输入"""
+    return bpy.app.version >= MULTILINGUAL_NATIVE_SINCE
 
 class BETTER_EXPERIE_MT_text_timestamp(bpy.types.Menu):
     bl_label = "时间戳"
@@ -45,7 +53,8 @@ class BETTER_EXPERIE_MT_texteditor_submenu(bpy.types.Menu):
         layout.separator()
         layout.label(text="便捷工具")
         layout.menu("TEXTEDITOR_MT_rara_text_timestamp")
-        layout.operator("better_experie.text_multi_language_input", text="多语言输入")
+        if not multilingual_native():
+            layout.operator("better_experie.text_multi_language_input", text="多语言输入")
         layout.operator("better_experie.text_word_count", text="字数统计")
 
  

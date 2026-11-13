@@ -245,6 +245,111 @@ def light_linking_find_item(collection, obj):
     return None
 
 
+def light_linking_collection_is_linked(collection, sub):
+    """sub 是否已经作为子集合挂在链接集合里"""
+    if collection is None or sub is None:
+        return False
+    return collection.children.get(sub.name) is not None
+
+
+def light_linking_find_child_item(collection, sub):
+    """按 collection.children 的下标对应到 collection_children 条目"""
+    if collection is None or sub is None:
+        return None
+    names = [child.name for child in collection.children]
+    if sub.name not in names:
+        return None
+    index = names.index(sub.name)
+    items = list(light_linking_collection_children(collection))
+    if 0 <= index < len(items):
+        return items[index]
+    return None
+
+
+def light_linking_collection_contains(outer, inner):
+    """outer 的子树里是否包含 inner（挂进去会成环）"""
+    if outer is None or inner is None:
+        return False
+    if outer == inner:
+        return True
+    stack = list(outer.children)
+    seen = set()
+    while stack:
+        child = stack.pop()
+        if child == inner:
+            return True
+        if child.name in seen:
+            continue
+        seen.add(child.name)
+        stack.extend(child.children)
+    return False
+
+
+def light_linking_is_master_collection(context, collection):
+    scene = getattr(context, "scene", None)
+    return scene is not None and collection is not None and collection == scene.collection
+
+
+def light_linking_add_collection(context, light_obj, sub, link_type, state=None):
+    """把集合挂进灯光的链接集合（挂集合本身，集合以后新增的对象自动生效）"""
+    if sub is None or light_obj is None:
+        return False
+    if light_linking_is_master_collection(context, sub):
+        return False
+    collection = light_linking_ensure_collection(context, light_obj, link_type)
+    if collection is None or collection == sub:
+        return False
+    if light_linking_collection_is_linked(collection, sub):
+        # 已经在里面了：直接跳过，不报错
+        return False
+    if light_linking_collection_contains(sub, collection):
+        # 被吸的集合里已经包含链接集合，挂进去会成环
+        return False
+    try:
+        link_state = state if state is not None else light_linking_mode(collection)
+        collection.children.link(sub)
+        item = light_linking_find_child_item(collection, sub)
+        if item is not None:
+            item.light_linking.link_state = link_state
+        light_obj.update_tag()
+        return True
+    except Exception as error:
+        print("[Light Linking] 添加集合失败：", error)
+        return False
+
+
+def light_linking_remove_collection(light_obj, sub, link_type):
+    if sub is None or light_obj is None:
+        return False
+    collection = light_linking_get_collection(light_obj, link_type)
+    if not light_linking_collection_is_linked(collection, sub):
+        return False
+    try:
+        collection.children.unlink(sub)
+        light_obj.update_tag()
+        return True
+    except Exception as error:
+        print("[Light Linking] 移除集合失败：", error)
+        return False
+
+
+def light_linking_ensure_collection_state(context, light_obj, sub, link_type, state):
+    """批量语义模式：集合必须在链接表里，且状态为 state"""
+    if sub is None or light_obj is None:
+        return False
+    collection = light_linking_get_collection(light_obj, link_type)
+    if collection is not None and collection == sub:
+        return False
+    item = light_linking_find_child_item(collection, sub)
+    if item is not None:
+        if item.light_linking.link_state == state:
+            return False
+        item.light_linking.link_state = state
+        light_obj.update_tag()
+        return True
+    return light_linking_add_collection(context, light_obj, sub, link_type, state)
+
+
 def light_linking_ensure_state(context, light_obj, obj, link_type, state):
     """确保 obj 在链接表里、且状态为 state（批量语义模式用）
 
@@ -280,7 +385,7 @@ def light_linking_ensure_state(context, light_obj, obj, link_type, state):
 def light_linking_batch_status(link_type, semantics, total, dropped, fresh):
     """批量模式的状态栏文案"""
     semantic_text = "包含" if semantics == "INCLUDE" else "排除"
-    action_text = "包含该物体" if semantics == "INCLUDE" else "排除该物体"
+    action_text = "包含该物体/集合" if semantics == "INCLUDE" else "排除该物体/集合"
     extras = []
     if dropped:
         extras.append(f"剔除 {dropped}")
@@ -322,7 +427,7 @@ def light_linking_update_status(context, light_obj, link_type):
     auto_text = " | 自动子级：开" if light_linking_auto_children_enabled(context) else ""
     try:
         context.workspace.status_text_set(
-            f"{light_linking_label(link_type)}：{mode_text}{auto_text} | 点击添加 | Ctrl+点击移除 | Esc/右键：结束"
+            f"{light_linking_label(link_type)}：{mode_text}{auto_text} | 点击物体/集合添加 | Ctrl+点击移除 | Esc/右键：结束"
         )
     except Exception:
         pass
@@ -518,7 +623,7 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
     bl_idname = "better_experie.light_linking_continuous_pick"
     bl_label = "吸管拾取"
     bl_description = ("左键：只作用于活动对象；Ctrl+左键：批量作用于所有选中对象（按活动/众数语义自动剔除）\n"
-                      "在三维视图或大纲中点击对象以添加链接，Ctrl+点击移除，Esc、右键或回车结束")
+                      "在三维视图或大纲中点击物体或集合以添加链接，Ctrl+点击移除，Esc、右键或回车结束")
     bl_options = {"REGISTER", "UNDO"}
 
     link_type: EnumProperty(items=LINK_TYPES, default="LIGHT")
@@ -537,6 +642,8 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
         self.removed_count = 0
         self.added_child_count = 0
         self.removed_child_count = 0
+        self.added_collection_count = 0
+        self.removed_collection_count = 0
         self.dropped_count = 0
         self.fresh_count = 0
         self.target_names = []
@@ -719,27 +826,29 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
         old_selected = [obj.name for obj in context.selected_objects]
         old_active = context.view_layer.objects.active.name if context.view_layer.objects.active else ""
         picked = []
+        picked_id = None
         try:
             # 先清空选择：点空白处时结果为空，不会把上一次的激活对象误当成命中目标
             light_linking_restore_selection(context, [], "")
             with context.temp_override(window=context.window, area=area, region=region):
                 select_operator()
+                if area.type == "OUTLINER":
+                    # 大纲里点中的元素 ID：物体行是 Object，集合行是 Collection
+                    picked_id = getattr(context, "id", None)
             picked = list(context.selected_objects)
         except Exception as error:
             print("[Light Linking] 拾取失败：", error)
         finally:
             light_linking_restore_selection(context, old_selected, old_active)
 
-        self.apply_picked(context, picked, event.ctrl)
+        self.apply_picked(context, picked, event.ctrl, picked_id)
         self.refresh_status(context)
         light_linking_tag_redraw(context)
 
-    def apply_picked(self, context, picked, remove):
-        if not picked:
+    def apply_picked(self, context, picked, remove, picked_id=None):
+        collection_target = picked_id if isinstance(picked_id, bpy.types.Collection) else None
+        if collection_target is None and not picked:
             return
-        include_children = light_linking_auto_children_enabled(context)
-        picked_names = {obj.name for obj in picked}
-        targets = light_linking_collect_targets(picked, include_children)
 
         if self.batch_mode:
             light_objects = [bpy.data.objects.get(name) for name in self.target_names]
@@ -750,11 +859,38 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
         if not light_objects:
             return
 
+        if collection_target is not None:
+            if light_linking_is_master_collection(context, collection_target):
+                self.report({"WARNING"}, "不能吸取场景主集合，请选择具体的集合")
+                return
+            for light_obj in light_objects:
+                self._apply_collection(context, light_obj, collection_target, remove)
+            return
+
+        include_children = light_linking_auto_children_enabled(context)
+        picked_names = {obj.name for obj in picked}
+        targets = light_linking_collect_targets(picked, include_children)
+
         for light_obj in light_objects:
             for target in targets:
                 if target == light_obj:
                     continue
                 self._apply_one(context, light_obj, target, remove, picked_names)
+
+    def _apply_collection(self, context, light_obj, sub, remove):
+        if remove:
+            if light_linking_remove_collection(light_obj, sub, self.link_type):
+                self.removed_count += 1
+                self.removed_collection_count += 1
+            return
+        if self.batch_mode:
+            changed = light_linking_ensure_collection_state(
+                context, light_obj, sub, self.link_type, self.semantics)
+        else:
+            changed = light_linking_add_collection(context, light_obj, sub, self.link_type)
+        if changed:
+            self.added_count += 1
+            self.added_collection_count += 1
 
     def _apply_one(self, context, light_obj, target, remove, picked_names):
         is_child = target.name not in picked_names
@@ -791,6 +927,9 @@ class BetterExperie_OT_LightLinkingContinuousPick(bpy.types.Operator):
                 text = f"已添加 {self.added_count} 个，移除 {self.removed_count} 个{light_linking_label(self.link_type)}对象"
             if auto_children and (self.added_child_count or self.removed_child_count):
                 text += f"（其中子级：添加 {self.added_child_count} 个，移除 {self.removed_child_count} 个）"
+            if self.added_collection_count or self.removed_collection_count:
+                text += (f"（其中集合：添加 {self.added_collection_count} 个，"
+                         f"移除 {self.removed_collection_count} 个）")
             self.report({"INFO"}, text)
             return {"FINISHED"}
         return {"CANCELLED"}

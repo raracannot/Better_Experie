@@ -13,6 +13,38 @@ def _force_update_ui():
         return None
 
 
+def _tag_preferences_redraw(context):
+    """偏好设置变化后刷新全部编辑器，让注入的按钮立刻出现/消失"""
+    window_manager = getattr(context, "window_manager", None)
+    windows = window_manager.windows if window_manager is not None else []
+    for window in windows:
+        for area in window.screen.areas:
+            area.tag_redraw()
+
+
+def preference_enabled(attribute, default=True):
+    """读取插件偏好里的布尔开关；读不到时返回 default（宁可显示）"""
+    try:
+        addons = bpy.context.preferences.addons
+        entry = addons.get(base_package)
+        if entry is None:
+            short = base_package.split(".")[-1]
+            for key, item in addons.items():
+                if key == short or key.endswith("." + short):
+                    entry = item
+                    break
+        if entry is None:
+            return default
+        return bool(getattr(entry.preferences, attribute, default))
+    except Exception:
+        return default
+
+
+def quick_group_tools_enabled():
+    """顶点组/边组列表里的选取与保存按钮是否显示（默认开）"""
+    return preference_enabled("show_quick_group_tools", True)
+
+
 def draw_description_panel(layout, context):
     box=layout.box()
     col = box.column(align=True)
@@ -38,22 +70,20 @@ def draw_description_panel(layout, context):
     col.label(text="详情功能介绍，请点击下方【功能介绍】按钮")
     # col.separator(type="LINE")
     row = col.row(align=True)
-    row.operator("wm.url_open", text="功能介绍", icon="HELP").url = "https://space.bilibili.com/27284213"#待发布后补充
+    row.operator("wm.url_open", text="功能介绍", icon="HELP").url = "https://www.bilibili.com/video/BV13wWo6rEJZ"
     # row.operator("wm.url_open", text="更新链接", icon="FILE_REFRESH").url = "https://pan.baidu.com/s/1aOYSzA_FobChbegOAWHACg?pwd=RARA"
-    row.operator("better_experie.check_update", text="检查更新", icon="FILE_REFRESH")
+    row.operator("better_experie.check_update", text="配置插件仓库", icon="FILE_REFRESH")
 
     # 强制更新：下载 GitHub 发布包并完整覆盖当前插件目录
     force_ui = _force_update_ui() or {}
-    row.operator("better_experie.force_update",
-                 text=force_ui.get("label", "强制更新"),
-                 icon=force_ui.get("icon", "IMPORT"))
+    row.operator("better_experie.force_update",text=force_ui.get("label", "强制更新"), icon=force_ui.get("icon", "IMPORT"))
     if force_ui.get("status"):
         col.label(text=force_ui["status"], icon="INFO")
 
     row.separator()
     row.operator("wm.url_open", text="哔哩哔哩", icon="USER").url = "https://space.bilibili.com/27284213"
     row.operator("wm.url_open", text="官方库", icon="BLENDER").url = "https://extensions.blender.org/author/58486/"
-    row.operator("wm.url_open", text="Github", icon="FILE_SCRIPT").url = "https://github.com/raracannot/Better_Experie"#待发布后补充
+    row.operator("wm.url_open", text="Github", icon="FILE_SCRIPT").url = "https://github.com/raracannot/Better_Experie"
 
 
 
@@ -172,12 +202,35 @@ class BetterExperie_Preferences(bpy.types.AddonPreferences):
         description="在三维视口右上角，显示视口快照的按钮",
         default=False)
 
+    show_quick_group_tools: bpy.props.BoolProperty(
+        name="属性视口 显示顶点组/边组的选取优化及存储优化工具",
+        description="在顶点组/边组列表每行显示选取与保存按钮（单击=加入，Shift=覆盖，Ctrl=移除）",
+        default=True,update=lambda self, context: _tag_preferences_redraw(context))
+
+    show_camera_dropdown: bpy.props.BoolProperty(
+        name="blender整体视口右上角的相机下拉栏",
+        description="在顶栏右侧显示活动相机下拉栏与左右切换按钮",
+        default=True,update=lambda self, context: _tag_preferences_redraw(context))
+
+    show_more_meshes: bpy.props.BoolProperty(
+        name="三维视口右键菜单的更多网格",
+        description="在 添加 → 网格 菜单里显示「更多网格」子菜单",
+        default=True,update=lambda self, context: _tag_preferences_redraw(context))
+
+    show_outliner_quick_add: bpy.props.BoolProperty(
+        name="大纲视图左上角的快速添加锁定及空物体",
+        description="在大纲视图标题栏显示「切换变换锁定」与「添加空物体」按钮",
+        default=True,update=lambda self, context: _tag_preferences_redraw(context))
+
+    show_edit_quick_tools: bpy.props.BoolProperty(
+        name="三维视口左上角网格编辑模式快捷复制及顶点组工具箱",
+        description="在三维视口标题栏显示复制/粘贴元素与新建顶点组按钮（编辑模式）",
+        default=True,update=lambda self, context: _tag_preferences_redraw(context))
+
     output_path: bpy.props.StringProperty(
             name="打包工具输出路径",
             description="打包后文件保存的位置（自动记录，下次打开无需重复设置）",
-            default="",
-            subtype='DIR_PATH'
-        )
+            default="",subtype='DIR_PATH')
 
     preferences_panel_selection: bpy.props.EnumProperty(
         items=[
@@ -192,18 +245,25 @@ class BetterExperie_Preferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "preferences_panel_selection",text="Cross Select", expand=True)
         if self.preferences_panel_selection == 'SETTING':
-            row = layout.row()
-            row.prop(self, "show_slot_compare_header")
-            row = layout.row()
-            row.prop(self, "show_view3d_screenshot_button")
-            if context.preferences.view.show_developer_ui:
-                row = layout.row()
-                row.prop(self, "show_debug",text="显示debug功能") #内部debug
-                if self.show_debug:
-                    layout.operator("better_experie.reload_addon", text="刷新插件")
+            box = layout.box()
+            box.label(text="界面元素显示", icon='PREFERENCES')
+            column = box.column(align=True)
+            column.prop(self, "show_camera_dropdown")
+            column.prop(self, "show_quick_group_tools")
+            column.prop(self, "show_outliner_quick_add")
+            column.prop(self, "show_more_meshes")
+            column.prop(self, "show_edit_quick_tools")
+
+            column.separator()
+            column.prop(self, "show_slot_compare_header")
+            column.prop(self, "show_view3d_screenshot_button")
             
-                row = layout.row()
-                row.prop(self, "console_multilang_fix") #修复多语言
+            if context.preferences.view.show_developer_ui:
+                column.separator()
+                column.prop(self, "show_debug",text="显示debug功能") #内部debug
+                if self.show_debug:
+                    column.operator("better_experie.reload_addon", text="刷新插件")
+                column.prop(self, "console_multilang_fix") #修复多语言
             
         elif self.preferences_panel_selection == 'HOTKEYS':
             draw_hotkey_panel(layout, context)
